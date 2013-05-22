@@ -1,0 +1,10 @@
+*.pyc
+*~
+\#*
+.*~
+.coverage
+*.egg-info
+build/
+dist/
+coverage.xml
+nosetests.xml
