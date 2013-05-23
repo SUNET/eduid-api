@@ -181,6 +181,11 @@ class APIBackend(object):
             # Don't disclose anything about our internal issues
             return None
 
+        log_context = {'client': self.remote_ip,
+                       'req': 'add_raw',
+                       }
+        self.logger.set_context(log_context)
+
         # Parse request
         req = AddRawRequest(request, 'add_raw', self.logger)
 
@@ -199,7 +204,7 @@ class APIBackend(object):
             result = True
 
         docu_id = str(docu.get('_id'))
-        self.logger.audit("add_raw, result={!s},data={!s},_id={!s}".format(result, data, docu_id))
+        self.logger.audit("result={!s},data={!s},_id={!s}".format(result, data, docu_id))
 
         if type(result) == int:
             cherrypy.response.status = result
