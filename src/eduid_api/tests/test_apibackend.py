@@ -43,6 +43,7 @@ import pkg_resources
 
 import cherrypy
 import cptestcase
+import simplejson as json
 
 import eduid_api
 from eduid_api.eduid_apibackend import APIBackend
@@ -57,8 +58,9 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         self.config = eduid_api.config.EduIDAPIConfig(self.config_file, debug)
         self.logger = eduid_api.log.EduIDAPILogger('test_apibackend', syslog=False)
         try:
-            self.db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
+            self.db = eduid_api.db.EduIDAPIDB(self.config.mongodb_uri)
         except Exception:
+            # will skip tests that require mongodb
             self.db = None
 
         self.apibackend = APIBackend(self.logger, self.db, self.config, expose_real_errors=True)
@@ -76,3 +78,59 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         response = self.request('/')
         self.assertEqual(response.output_status, '404 Not Found')
 
+    def test_add_raw_request_wrong_version(self):
+        """
+        Verify add_raw request with wrong version is rejected
+        """
+        a = {'add_raw': {},
+             'version': 9999,
+             }
+        j = json.dumps(a)
+        response = self.request('/add_raw', request=j, return_error=True)
+        self.assertIn('Unknown request version : 9999', response.body[0])
+
+        # try again with blinding
+        self.apibackend.expose_real_errors = False
+        response = self.request('/add_raw', request=j, return_error=True)
+        self.assertEqual(response.output_status, '500 Internal Server Error')
+
+    def test_add_raw_missing_data(self):
+        """
+        Verify add_raw request with missing data is rejected
+        """
+        for req_field in ['data']:
+            a = {'add_raw': {'foo': 'bar'},
+                 'version': 1,
+                 }
+            if req_field in a['add_raw']:
+                del a['add_raw'][req_field]
+            j = json.dumps(a)
+            response = self.request('/add_raw', request=j, return_error=True)
+            self.assertIn("No '{!s}' in request".format(req_field), response.body[0])
+
+    def test_add_raw_request1(self):
+        """
+        Verify correct add_raw request
+        """
+        if self.db is None:
+            raise unittest.SkipTest("requires accessible MongoDB server on {!s}".format(
+                    self.config.mongodb_uri))
+
+        raise unittest.SkipTest("test disabled because AMQP server can't be mocked at this time")
+
+        a = {'add_raw':
+                 {'data': {'email': 'ft@example.net',
+                           'verified': True,
+                           },
+                  },
+             'version': 1,
+             }
+        j = json.dumps(a)
+        response = self.request('/add_raw', request=j, return_error=True)
+        res = json.loads(response.body[0])
+        expected = {'add_raw':
+                        {'version': 1,
+                         'success': True,
+                         }
+                    }
+        self.assertEqual(res, expected)
