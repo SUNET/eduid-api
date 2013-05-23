@@ -45,7 +45,8 @@ setup(
     author='NORDUnet A/S',
     url='https://github.com/SUNET/eduid-api',
     license='BSD',
-    packages=find_packages(),
+    packages=['eduid_api',],
+    package_dir = {'': 'src'},
     include_package_data=True,
     zip_safe=False,
     install_requires=requires,
@@ -55,4 +56,8 @@ setup(
         'docs': docs_extras,
     },
     test_suite='eduid_api',
+    entry_points={
+        'console_scripts': ['eduid_apibackend=eduid_api.eduid_apibackend:main',
+                            ]
+        },
 )
