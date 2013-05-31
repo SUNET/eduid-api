@@ -5,8 +5,16 @@ from setuptools import setup, find_packages
 
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = open(os.path.join(here, 'README.rst')).read()
-CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
+README = 'eduID API application'
+CHANGES = ''
+try:
+    README = open(os.path.join(here, 'README.rst')).read()
+except IOError:
+    pass
+try:
+    CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
+except IOError:
+    pass
 
 version = '0.1dev'
 
