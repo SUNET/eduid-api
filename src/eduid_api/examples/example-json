@@ -10,9 +10,18 @@ import json
 
 a = {'add_raw':
          {
-        'data': {'verified': True,
-                 'email': 'ft@example.net',
-                 },
+        'data': {
+            "sn": "Thulin",
+            "givenName": "Fredrik",
+            "eduPersonPrincipalName": "ft@eduid.se",
+            "uid": "ft",
+            "eduPersonTargetedID": "f.t.a.t.e.d.u.I.D",
+            "c": "SE",
+            "ou": "IT",
+            "email": "fredrik@thulin.net",
+            "displayName": "Fredrik Thulin",
+            "norEduPersonNIN": "SE197001013333"
+            },
         },
      'version': 1,
      }
