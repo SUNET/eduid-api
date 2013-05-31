@@ -242,7 +242,8 @@ def main(myname = 'eduid_apibackend'):
     logger = eduid_api.log.EduIDAPILogger(myname)
     db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
 
-    cherry_conf = {'server.socket_port': config.listen_port,
+    cherry_conf = {'server.socket_host': config.listen_addr,
+                   'server.socket_port': config.listen_port,
                    # enables X-Forwarded-For, since BCP is to run this server
                    # behind a webserver that handles SSL
                    'tools.proxy.on': True,

@@ -45,6 +45,7 @@ _CONFIG_DEFAULTS = {'debug': False, # overwritten in EduIDAPIConfig.__init__()
                     'logdir': None,
                     'mongodb_uri': '127.0.0.1',
                     'add_raw_allow': '', # comma-separated list of IP addresses
+                    'listen_addr': '0.0.0.0',
                     'listen_port': '8511',
                     'ssl_adapter': 'builtin',  # one of cherrypy.wsgiserver.ssl_adapters
                     'server_cert': None,  # SSL cert filename
@@ -99,6 +100,13 @@ class EduIDAPIConfig():
         Set to True to log debug messages (boolean).
         """
         return self.config.getboolean(self.section, 'debug')
+
+    @property
+    def listen_addr(self):
+        """
+        IP address to listen on.
+        """
+        return self.config.get(self.section, 'listen_addr')
 
     @property
     def listen_port(self):
