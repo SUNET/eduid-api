@@ -252,6 +252,13 @@ def main(myname = 'eduid_apibackend'):
         cherry_conf['log.error_file'] = os.path.join(config.logdir, 'error.log')
     else:
         sys.stderr.write("NOTE: Config option 'logdir' not set.\n")
+
+    if config.server_cert and config.server_key:
+        cherry_conf['server.ssl_module'] = cherrypy.wsgiserver.get_ssl_adapter_class(config.ssl_adapter)
+        cherry_conf['server.ssl_certificate'] = config.server_cert
+        cherry_conf['server.ssl_private_key'] = config.server_key
+        cherry_conf['server.ssl_certificate_chain'] = config.cert_chain
+
     cherrypy.config.update(cherry_conf)
 
     cherrypy.quickstart(APIBackend(logger, db, config))

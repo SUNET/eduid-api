@@ -46,6 +46,10 @@ _CONFIG_DEFAULTS = {'debug': False, # overwritten in EduIDAPIConfig.__init__()
                     'mongodb_uri': '127.0.0.1',
                     'add_raw_allow': '', # comma-separated list of IP addresses
                     'listen_port': '8511',
+                    'ssl_adapter': 'builtin',  # one of cherrypy.wsgiserver.ssl_adapters
+                    'server_cert': None,  # SSL cert filename
+                    'server_key': None,   # SSL key filename
+                    'cert_chain': None,   # SSL certificate chain filename, or None
                     }
 
 _CONFIG_SECTION = 'eduid_apibackend'
@@ -102,3 +106,31 @@ class EduIDAPIConfig():
         The port the eduID API backend should listen on (integer).
         """
         return self.config.getint(self.section, 'listen_port')
+
+    @property
+    def ssl_adapter(self):
+        """
+        CherryPy SSL adapter class to use (must be one of cherrypy.wsgiserver.ssl_adapters)
+        """
+        return self.config.get(self.section, 'ssl_adapter')
+
+    @property
+    def server_cert(self):
+        """
+        SSL certificate filename (None == SSL disabled)
+        """
+        return self.config.get(self.section, 'server_cert')
+
+    @property
+    def server_key(self):
+        """
+        SSL private key filename (None == SSL disabled)
+        """
+        return self.config.get(self.section, 'server_key')
+
+    @property
+    def cert_chain(self):
+        """
+        SSL certificate chain filename
+        """
+        return self.config.get(self.section, 'cert_chain')
