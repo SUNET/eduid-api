@@ -51,6 +51,7 @@ _CONFIG_DEFAULTS = {'debug': False, # overwritten in EduIDAPIConfig.__init__()
                     'server_cert': None,  # SSL cert filename
                     'server_key': None,   # SSL key filename
                     'cert_chain': None,   # SSL certificate chain filename, or None
+                    'broker_url': 'amqp://',   # AMQP broker URL. See Celery documentation for details.
                     }
 
 _CONFIG_SECTION = 'eduid_apibackend'
@@ -142,3 +143,13 @@ class EduIDAPIConfig():
         SSL certificate chain filename
         """
         return self.config.get(self.section, 'cert_chain')
+
+    @property
+    def broker_url(self):
+        """
+        Celery broker_url setting. See Celery documentation for details.
+
+        If a broker is configured, the eduID Attribute Manager will be
+        notified on database changes.
+        """
+        return self.config.get(self.section, 'broker_url')

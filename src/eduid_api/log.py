@@ -68,9 +68,18 @@ class EduIDAPILogger():
         """
         self.logger.info("AUDIT: {context}, {data}".format(context = self.context, data = data))
 
+    def warning(self, msg):
+        """
+        Log a warning.
+
+        :params msg: Error message as string
+        """
+        self.logger.warning(msg)
+
     def error(self, msg, traceback=False):
         """
         Log an error message, additionally appending a traceback.
+
         :params msg: Error message as string
         :params traceback: Append a traceback or not, True or False
         """

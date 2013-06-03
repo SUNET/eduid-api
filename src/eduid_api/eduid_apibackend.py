@@ -51,7 +51,9 @@ import simplejson
 
 import eduid_api
 from eduid_api.common import EduIDAPIError
+
 from eduid_am.tasks import update_attributes
+from eduid_am.celery import celery
 
 default_config_file = "/opt/eduid/eduid_api/eduid_apibackend.ini"
 default_debug = False
@@ -261,6 +263,11 @@ def main(myname = 'eduid_apibackend'):
         cherry_conf['server.ssl_certificate_chain'] = config.cert_chain
 
     cherrypy.config.update(cherry_conf)
+
+    if config.broker_url is not None:
+        celery.conf.update(BROKER_URL=config.broker_url)
+    else:
+        logger.warning("Config option 'broker_url' not set. AMQP notifications will not work.")
 
     cherrypy.quickstart(APIBackend(logger, db, config))
 
