@@ -7,6 +7,11 @@
 
 import sys
 import json
+import time
+import bcrypt
+
+salt = bcrypt.gensalt()
+credential_id = int(time.time() - 1370246844)
 
 a = {'add_raw':
          {
@@ -20,7 +25,10 @@ a = {'add_raw':
             "ou": "IT",
             "email": "fredrik@thulin.net",
             "displayName": "Fredrik Thulin",
-            "norEduPersonNIN": "SE197001013333"
+            "norEduPersonNIN": "SE197001013333",
+            # made-up attributes
+            "eduID,private,salt": salt,
+            "eduID,private,credential_id": credential_id,
             },
         },
      'version': 1,
