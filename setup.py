@@ -29,11 +29,6 @@ requires = [
 test_requires = [
 ]
 
-
-docs_extras = [
-]
-
-
 testing_extras = test_requires + [
     'nose==1.2.1',
     'coverage==3.6',
@@ -61,7 +56,6 @@ setup(
     tests_require=test_requires,
     extras_require={
         'testing': testing_extras,
-        'docs': docs_extras,
     },
     test_suite='eduid_api',
     entry_points={
