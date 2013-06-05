@@ -43,6 +43,7 @@ See the README.rst file for a more in-depth description.
 
 import os
 import sys
+import bson
 import argparse
 
 import pymongo
@@ -148,7 +149,14 @@ class AddRawRequest(BaseRequest):
             if req_field not in self._parsed_req:
                 raise EduIDAPIError("No {!r} in request".format(req_field))
 
+        for req_data_field in ['email']:
+            if req_data_field not in self._parsed_req['data']:
+                raise EduIDAPIError("No {!r} in request[data]".format(req_field))
+
         self._data = self._parsed_req['data']
+
+        if '_id' in self._data:
+            self._data['_id'] = bson.ObjectId(self._data['_id'])
 
 
     def data(self):
@@ -195,15 +203,24 @@ class APIBackend(object):
         result = 500
         data = ''
 
-        # save in mongodb
-        try:
-            self.db.users.save(docu, manipulate=True, safe=True)
-        except pymongo.errors.PyMongoError as exception:
-            data = str(exception)
+        # check if email already exists in the database (NB. The eduid_api database, not eduid_am).
+        existing = self.db.users.find({'email': docu['email']})
+        if existing.count() > 1:
             result = False
+            data = 'multiple records found for email {!r}'.format(docu['email'])
+        elif existing.count() and existing[0]['_id'] != docu.get('_id'):
+            result = False
+            data = 'email {!r} already exist (_id {!s})'.format(docu['email'], existing[0]['_id'])
         else:
-            data = 'OK'
-            result = True
+            # save in mongodb
+            try:
+                self.db.users.save(docu, manipulate=True, safe=True)
+            except pymongo.errors.PyMongoError as exception:
+                data = str(exception)
+                result = False
+            else:
+                data = 'OK'
+                result = True
 
         docu_id = str(docu.get('_id'))
         self.logger.audit("result={!s},data={!s},_id={!s}".format(result, data, docu_id))
