@@ -19,7 +19,7 @@ except IOError:
 version = '0.1dev'
 
 requires = [
-    'eduid_am',
+    'eduid_am == 0.3.0',
     'pymongo == 2.5.1',
     'cherrypy == 3.2.4',
     'simplejson == 2.6.2',
