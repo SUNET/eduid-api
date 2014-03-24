@@ -21,7 +21,7 @@ version = '0.2.0'
 requires = [
     'eduid_am==0.4.2',
     'pymongo == 2.6.3',
-    'cherrypy == 3.2.0',
+    'cherrypy == 3.2.4',
     'simplejson == 2.6.2',
 ]
 
