@@ -16,11 +16,11 @@ try:
 except IOError:
     pass
 
-version = '0.1dev'
+version = '0.2.0'
 
 requires = [
-    'eduid_am',
-    'pymongo == 2.5.1',
+    'eduid_am==0.4.2',
+    'pymongo == 2.6.3',
     'cherrypy == 3.2.0',
     'simplejson == 2.6.2',
 ]
