@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013 NORDUnet A/S
+# Copyright (c) 2013, 2015 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -32,17 +32,21 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
+
 class EduIDAPIError(Exception):
     """
     eduID API backend Exception class.
+
+    :param reason: Reason for exception (typically a string)
+    :type reason: object
     """
     def __init__(self, reason):
         Exception.__init__(self)
         self.reason = reason
 
     def __str__(self):
-        return '<{cl} instance at {addr}: {reason!r}>'.format( \
+        return '<{cl} instance at {addr}: {reason!r}>'.format(
             cl = self.__class__.__name__,
             addr = hex(id(self)),
             reason = self.reason,
-            )
+        )

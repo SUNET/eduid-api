@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013 NORDUnet A/S
+# Copyright (c) 2013, 2015 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -36,6 +36,7 @@ import logging
 import logging.handlers
 import cherrypy
 
+
 class EduIDAPILogger():
     """
     Simple class to do logging in a unified way.
@@ -43,10 +44,14 @@ class EduIDAPILogger():
 
     def __init__(self, myname, context = '', syslog = True, debug = False):
         """
-        :params myname: string with name of application
-        :params context: string with auxillary data to appear in all audit log messages
-        :params syslog: boolean, log to syslog or not?
-        :params debug: boolean, controls log verbosity
+        :param myname: name of application
+        :param context: auxillary data to appear in all audit log messages
+        :param syslog: log to syslog or not?
+        :param debug: controls log verbosity
+        :type myname: basestring
+        :type context: basestring
+        :type syslog: bool
+        :type debug: bool
         """
         self.context = context
 
@@ -64,7 +69,8 @@ class EduIDAPILogger():
     def audit(self, data):
         """
         Audit log data.
-        :params data: Audit data as string
+        :param data: Audit data
+        :type data: basestring
         """
         self.logger.info("AUDIT: {context}, {data}".format(context = self.context, data = data))
 
@@ -72,7 +78,8 @@ class EduIDAPILogger():
         """
         Log a warning.
 
-        :params msg: Error message as string
+        :param msg: Error message
+        :type msg: basestring
         """
         self.logger.warning(msg)
 
@@ -80,8 +87,9 @@ class EduIDAPILogger():
         """
         Log an error message, additionally appending a traceback.
 
-        :params msg: Error message as string
-        :params traceback: Append a traceback or not, True or False
+        :param msg: Error message
+        :param traceback: Append a traceback or not, True or False
+        :type msg: basestring
         """
         self.logger.error(msg, exc_info=traceback)
         # get error messages into the cherrypy error log as well
@@ -90,10 +98,11 @@ class EduIDAPILogger():
     def set_context(self, context):
         """
         Set data to be included in all future audit logs.
+        :param context: Dict with key-value pairs to make context from.
+        :type context: dict
         """
         # XXX this might not be thread safe! Must test if logging is mangled with
         # concurrent authentication requests for different users/from different addresses.
         # Potential solution would be to store context info in cherrypy request object instead,
         # since documentation actually says it can be used like that.
         self.context = ', '.join([k + '=' + v for (k, v) in context.items()])
-

@@ -1,7 +1,4 @@
 import os
-import sys
-
-from setuptools import setup, find_packages
 
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -16,13 +13,14 @@ try:
 except IOError:
     pass
 
-version = '0.2.2'
+version = '0.2.3-dev'
 
 requires = [
     'eduid_am == 0.4.9',
-    'pymongo == 2.6.3',
-    'cherrypy == 3.2.4',
-    'simplejson == 2.6.2',
+    'pymongo == 2.7.2',
+    'cherrypy == 3.6.0',
+    'simplejson == 3.6.5',
+    'jose == 0.2.2',
 ]
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# Copyright (c) 2013 NORDUnet A/S
+# Copyright (c) 2013, 2015 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -87,6 +87,13 @@ def parse_args():
 class BaseRequest():
     """
     Base authentication/revocation request.
+
+    :param json: JSON formatted request
+    :param top_node: 'add_raw' - part of JSON request to parse
+    :param logger: logging object
+    :type json: basestring
+    :type top_node: basestring
+    :type logger: eduid_api.log.EduIDAPILogger
     """
     def __init__(self, json, top_node, logger):
         self.top_node = top_node
@@ -115,7 +122,7 @@ class BaseRequest():
             self.__class__.__name__,
             id(self),
             action=self.top_node,
-            ))
+        ))
 
 
 class AddRawRequest(BaseRequest):
@@ -138,10 +145,12 @@ class AddRawRequest(BaseRequest):
 
     def __init__(self, json, top_node, logger):
         """
-        :params json: string, request
-        :params config: EduIDAPIConfig instance
-        :params top_node: String, 'add_raw' - part of JSON request to parse
-        :params logger: EduIDAPILogger instance
+        :param json: JSON formatted request
+        :param top_node: 'add_raw' - part of JSON request to parse
+        :param logger: logging object
+        :type json: basestring
+        :type top_node: basestring
+        :type logger: eduid_api.log.EduIDAPILogger
         """
         BaseRequest.__init__(self, json, top_node, logger)
 
@@ -151,26 +160,36 @@ class AddRawRequest(BaseRequest):
 
         for req_data_field in ['email']:
             if req_data_field not in self._parsed_req['data']:
-                raise EduIDAPIError("No {!r} in request[data]".format(req_field))
+                raise EduIDAPIError("No {!r} in request[data]".format(req_data_field))
 
         self._data = self._parsed_req['data']
 
         if '_id' in self._data:
             self._data['_id'] = bson.ObjectId(self._data['_id'])
 
-
     def data(self):
+        """
+        Return the 'data' element from the request.
+        """
         return self._data
 
 
 class APIBackend(object):
+    """
+    The CherryPy application object.
+    """
 
     def __init__(self, logger, db, config, expose_real_errors=False):
         """
-        :params logger: EduIDAPILogger() instance for audit logging
-        :params db: EduIDAPIDB() instance
-        :params config: EduIDAPIConfig() instance
-        :params expose_real_errors: boolean, mask errors or expose them (for devel/debug/test)
+        :param logger: logging object (for audit logs)
+        :param db: database object
+        :param config: config object
+        :param expose_real_errors: mask errors or expose them (for devel/debug/test)
+        :type logger: eduid_api.log.EduIDAPILogger
+        :type db: eduid_api.db.EduIDAPIDB
+        :type config: eduid_api.config.EduIDAPIConfig
+        :type expose_real_errors: bool
+
         """
         self.logger = logger
         self.db = db
@@ -181,12 +200,17 @@ class APIBackend(object):
 
     @cherrypy.expose
     def add_raw(self, request=None):
+        """
+        Add an entry to the user database.
+
+        :param request: JSON formatted request
+        :type request: basestring
+        """
         self.remote_ip = cherrypy.request.remote.ip
-        result = False
 
         if not self.remote_ip in self.config.add_raw_allow:
             self.logger.error("Denied add_raw request from {} not in add_raw_allow ({})".format(
-                    self.remote_ip, self.config.add_raw_allow))
+                self.remote_ip, self.config.add_raw_allow))
             cherrypy.response.status = 403
             # Don't disclose anything about our internal issues
             return None
@@ -200,16 +224,14 @@ class APIBackend(object):
         req = AddRawRequest(request, 'add_raw', self.logger)
 
         docu = req.data()
-        result = 500
+        result = False
         data = ''
 
         # check if email already exists in the database (NB. The eduid_api database, not eduid_am).
         existing = self.db.users.find({'email': docu['email']})
         if existing.count() > 1:
-            result = False
             data = 'multiple records found for email {!r}'.format(docu['email'])
         elif existing.count() and existing[0]['_id'] != docu.get('_id'):
-            result = False
             data = 'email {!r} already exist (_id {!s})'.format(docu['email'], existing[0]['_id'])
         else:
             # save in mongodb
@@ -217,7 +239,6 @@ class APIBackend(object):
                 self.db.users.save(docu, manipulate=True, safe=True)
             except pymongo.errors.PyMongoError as exception:
                 data = str(exception)
-                result = False
             else:
                 data = 'OK'
                 result = True
@@ -250,9 +271,12 @@ class APIBackend(object):
         return "{}\n".format(simplejson.dumps(response, sort_keys=True, indent=4))
 
 
-def main(myname = 'eduid_apibackend'):
+def main(myname = 'eduid_api'):
     """
     Initialize everything and start the API backend.
+
+    :param myname: Name of application, for logging purposes.
+    :type myname: basestring
     """
     args = parse_args()
 

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013 NORDUnet A/S
+# Copyright (c) 2013, 2015 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -45,12 +45,12 @@ class EduIDAPIDB():
     Database backend (mongodb) for eduID API.
     """
 
-    def __init__(self, uri, conn=None, collection="eduid_api", **kwargs):
+    def __init__(self, uri, conn=None, collection='eduid_api', **kwargs):
         if conn is not None:
             self.connection = conn
         else:
-            if "replicaSet=" in uri:
-                self.connection = pymongo.mongo_replica_set_client.MongoReplicaSetClient(uri, **kwargs)
+            if 'replicaSet=' in uri:
+                self.connection = pymongo.MongoReplicaSetClient(uri, **kwargs)
             else:
                 self.connection = pymongo.MongoClient(uri, **kwargs)
         self.collection = self.connection[collection]

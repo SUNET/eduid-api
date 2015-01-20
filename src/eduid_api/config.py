@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# Copyright (c) 2013 NORDUnet A/S
+# Copyright (c) 2013, 2015 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -41,22 +41,33 @@ import ConfigParser
 
 from eduid_api.common import EduIDAPIError
 
-_CONFIG_DEFAULTS = {'debug': False, # overwritten in EduIDAPIConfig.__init__()
+_CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig.__init__()
                     'logdir': None,
                     'mongodb_uri': '127.0.0.1',
-                    'add_raw_allow': '', # comma-separated list of IP addresses
+                    'add_raw_allow': '',       # comma-separated list of IP addresses
                     'listen_addr': '0.0.0.0',
                     'listen_port': '8511',
                     'ssl_adapter': 'builtin',  # one of cherrypy.wsgiserver.ssl_adapters
-                    'server_cert': None,  # SSL cert filename
-                    'server_key': None,   # SSL key filename
-                    'cert_chain': None,   # SSL certificate chain filename, or None
+                    'server_cert': None,       # SSL cert filename
+                    'server_key': None,        # SSL key filename
+                    'cert_chain': None,        # SSL certificate chain filename, or None
                     'broker_url': 'amqp://',   # AMQP broker URL. See Celery documentation for details.
                     }
 
-_CONFIG_SECTION = 'eduid_apibackend'
+_CONFIG_SECTION = 'eduid_api'
+
 
 class EduIDAPIConfig():
+    """
+    Application configuration.
+
+    Loads an INI file and provides configuration data.
+
+    :param filename: Path to INI file.
+    :param debug: Debug setting, from command line parsing.
+    :type filename: basestring
+    :type debug: bool
+    """
 
     def __init__(self, filename, debug):
         self.section = _CONFIG_SECTION
@@ -72,7 +83,9 @@ class EduIDAPIConfig():
     @property
     def logdir(self):
         """
-        Path to CherryPy logfiles (string). Something like '/var/log/vccs' maybe.
+        Path to CherryPy logfiles. Something like '/var/log/eduid' maybe.
+
+        :rtype: basestring or None
         """
         res = self.config.get(self.section, 'logdir')
         if not res:
@@ -82,7 +95,9 @@ class EduIDAPIConfig():
     @property
     def mongodb_uri(self):
         """
-        MongoDB connection URI (string). See MongoDB documentation for details.
+        MongoDB connection URI. See MongoDB documentation for details.
+
+        :rtype: basestring
         """
         return self.config.get(self.section, 'mongodb_uri')
 
@@ -92,6 +107,8 @@ class EduIDAPIConfig():
         List of IP addresses from which to accept add_raw commands (string).
 
         Comma-separated list of IP addresses.
+
+        :rtype: basestring
         """
         return self._parsed_add_raw_allow
 
@@ -99,6 +116,8 @@ class EduIDAPIConfig():
     def debug(self):
         """
         Set to True to log debug messages (boolean).
+
+        :rtype: bool
         """
         return self.config.getboolean(self.section, 'debug')
 
@@ -106,6 +125,8 @@ class EduIDAPIConfig():
     def listen_addr(self):
         """
         IP address to listen on.
+
+        :rtype: basestring
         """
         return self.config.get(self.section, 'listen_addr')
 
@@ -113,6 +134,8 @@ class EduIDAPIConfig():
     def listen_port(self):
         """
         The port the eduID API backend should listen on (integer).
+
+        :rtype: int
         """
         return self.config.getint(self.section, 'listen_port')
 
@@ -127,6 +150,8 @@ class EduIDAPIConfig():
     def server_cert(self):
         """
         SSL certificate filename (None == SSL disabled)
+
+        :rtype: basestring or None
         """
         return self.config.get(self.section, 'server_cert')
 
@@ -134,6 +159,8 @@ class EduIDAPIConfig():
     def server_key(self):
         """
         SSL private key filename (None == SSL disabled)
+
+        :rtype: basestring or None
         """
         return self.config.get(self.section, 'server_key')
 
@@ -141,6 +168,8 @@ class EduIDAPIConfig():
     def cert_chain(self):
         """
         SSL certificate chain filename
+
+        :rtype: basestring
         """
         return self.config.get(self.section, 'cert_chain')
 
@@ -151,5 +180,7 @@ class EduIDAPIConfig():
 
         If a broker is configured, the eduID Attribute Manager will be
         notified on database changes.
+
+        :rtype: basestring
         """
         return self.config.get(self.section, 'broker_url')
