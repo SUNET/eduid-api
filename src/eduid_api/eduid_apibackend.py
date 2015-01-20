@@ -56,7 +56,7 @@ from eduid_api.common import EduIDAPIError
 from eduid_am.tasks import update_attributes
 from eduid_am.celery import celery
 
-default_config_file = "/opt/eduid/eduid_api/eduid_apibackend.ini"
+default_config_file = "/opt/eduid/etc/eduid_api.ini"
 default_debug = False
 
 

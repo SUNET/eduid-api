@@ -16,10 +16,10 @@ try:
 except IOError:
     pass
 
-version = '0.2.1'
+version = '0.2.2'
 
 requires = [
-    'eduid_am==0.4.3',
+    'eduid_am == 0.4.9',
     'pymongo == 2.6.3',
     'cherrypy == 3.2.4',
     'simplejson == 2.6.2',
@@ -59,7 +59,7 @@ setup(
     },
     test_suite='eduid_api',
     entry_points={
-        'console_scripts': ['eduid_apibackend=eduid_api.eduid_apibackend:main',
+        'console_scripts': ['eduid_api=eduid_api.eduid_apibackend:main',
                             ]
         },
 )
