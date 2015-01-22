@@ -84,48 +84,7 @@ def parse_args():
     return parser.parse_args()
 
 
-class BaseRequest():
-    """
-    Base authentication/revocation request.
-
-    :param json: JSON formatted request
-    :param top_node: 'add_raw' - part of JSON request to parse
-    :param logger: logging object
-    :type json: basestring
-    :type top_node: basestring
-    :type logger: eduid_api.log.EduIDAPILogger
-    """
-    def __init__(self, json, top_node, logger):
-        self.top_node = top_node
-        try:
-            body = simplejson.loads(json)
-        except Exception:
-            logger.error("Failed parsing JSON body :\n{!r}\n-----\n".format(json), traceback=True)
-            raise EduIDAPIError("Failed parsing request")
-
-        assert(isinstance(body, dict))
-
-        if body.get('version', 1) is not 1:
-            # really handle missing version below
-            raise EduIDAPIError("Unknown request version : {!r}".format(body['version']))
-
-        for req_field in ['version', top_node]:
-            if req_field not in body:
-                raise EduIDAPIError("No {!r} in request".format(req_field))
-
-        req = body[top_node]
-
-        self._parsed_req = req
-
-    def __repr__(self):
-        return ('<{} @{:#x}: action={action!r}'.format(
-            self.__class__.__name__,
-            id(self),
-            action=self.top_node,
-        ))
-
-
-class AddRawRequest(BaseRequest):
+class AddRawRequest(eduid_api.request.BaseRequest):
 
     """
     Parse JSON body into 'add raw' request object.
@@ -141,18 +100,17 @@ class AddRawRequest(BaseRequest):
         },
         "version": 1
     }
+
+    :param json: JSON formatted request
+    :param logger: logging object
+    :param config: config object
+    :type json: basestring
+    :type logger: eduid_api.log.EduIDAPILogger
+    :type config: eduid_api.config.EduIDAPIConfig
     """
 
-    def __init__(self, json, top_node, logger):
-        """
-        :param json: JSON formatted request
-        :param top_node: 'add_raw' - part of JSON request to parse
-        :param logger: logging object
-        :type json: basestring
-        :type top_node: basestring
-        :type logger: eduid_api.log.EduIDAPILogger
-        """
-        BaseRequest.__init__(self, json, top_node, logger)
+    def __init__(self, json, logger, config):
+        eduid_api.request.BaseRequest.__init__(self, json, logger, config)
 
         for req_field in ['data']:
             if req_field not in self._parsed_req:
@@ -199,6 +157,36 @@ class APIBackend(object):
         self.remote_ip = 'UNKNOWN'
 
     @cherrypy.expose
+    def mfa_add(self, request=None):
+        """
+        Add a 2FA credential to the 2fa database.
+
+        :param request: JSON formatted request
+        :type request: basestring
+        """
+        self.remote_ip = cherrypy.request.remote.ip
+
+        self.logger.debug("Parsing mfa_add request from {!r}".format(self.remote_ip))
+
+        decrypted = eduid_api.request.check_and_decrypt(request, self.remote_ip, 'mfa_add', self.config, self.logger)
+
+        if not decrypted:
+            self.logger.info("Could not decrypt/authenticate request from {!r}".format(self.remote_ip))
+            cherrypy.response.status = 403
+            # Don't disclose anything about our internal issues
+            return None
+
+        log_context = {'client': self.remote_ip,
+                       'req': 'mfa_add',
+                       }
+        self.logger.set_context(log_context)
+
+        # Parse request
+        req = eduid_api.mfa_add.MFAAddRequest(request, self.logger, self.config)
+        self.logger.debug("Parsed and authenticated mfa_add request:\n{!r}".format(req))
+
+
+    @cherrypy.expose
     def add_raw(self, request=None):
         """
         Add an entry to the user database.
@@ -208,9 +196,9 @@ class APIBackend(object):
         """
         self.remote_ip = cherrypy.request.remote.ip
 
-        if not self.remote_ip in self.config.add_raw_allow:
-            self.logger.error("Denied add_raw request from {} not in add_raw_allow ({})".format(
-                self.remote_ip, self.config.add_raw_allow))
+        decrypted = eduid_api.request.check_and_decrypt(request, self.remote_ip, 'add_raw', self.config, self.logger)
+
+        if not decrypted:
             cherrypy.response.status = 403
             # Don't disclose anything about our internal issues
             return None
@@ -221,7 +209,7 @@ class APIBackend(object):
         self.logger.set_context(log_context)
 
         # Parse request
-        req = AddRawRequest(request, 'add_raw', self.logger)
+        req = AddRawRequest(request, self.logger, self.config)
 
         docu = req.data()
         result = False
@@ -282,7 +270,7 @@ def main(myname = 'eduid_api'):
 
     # initialize various components
     config = eduid_api.config.EduIDAPIConfig(args.config_file, args.debug)
-    logger = eduid_api.log.EduIDAPILogger(myname)
+    logger = eduid_api.log.EduIDAPILogger(myname, debug = config.debug)
     db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
 
     cherry_conf = {'server.socket_host': config.listen_addr,

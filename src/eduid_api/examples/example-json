@@ -2,36 +2,36 @@
 #
 # Produce example JSON to be POSTed to API backend
 #
-# $ ./example-json | curl --data-urlencode request@- -v localhost:8511/add_raw
+# $ ./example-json | curl --data-urlencode request@- -v localhost:8511/mfa_add
 #
+#
+# Test key generated with
+# >>> from Crypto.PublicKey import RSA
+# >>> key = RSA.generate(1024)
+# >>> print key.publickey().exportKey('PEM')
+# >>> print key.exportKey('PEM')
 
 import sys
 import json
+import jose
 import time
-import bcrypt
 
-salt = bcrypt.gensalt()
-credential_id = int(time.time() - 1370246844)
+JWK = {'k': 'password',
+       }
 
-a = {'add_raw':
+a = {'twofa_add':
          {
         'data': {
             "sn": "Thulin",
             "givenName": "Fredrik",
-            "eduPersonPrincipalName": "ft@eduid.se",
-            "uid": "ft",
-            "eduPersonTargetedID": "f.t.a.t.e.d.u.I.D",
-            "c": "SE",
-            "ou": "IT",
-            "email": "fredrik@thulin.net",
-            "displayName": "Fredrik Thulin",
-            "norEduPersonNIN": "SE197001013333",
-            # made-up attributes
-            "eduID,private,salt": salt,
-            "eduID,private,credential_id": credential_id,
             },
         },
      'version': 1,
      }
 
-print json.dumps(a, sort_keys=True, indent=4)
+sys.stderr.write(json.dumps(a, sort_keys=True, indent=4) + '\n')
+
+jwe = jose.encrypt({'foo': 'bar'}, JWK)
+
+print ""
+print jose.serialize_compact(jwe)

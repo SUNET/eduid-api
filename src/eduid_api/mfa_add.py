@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013 NORDUnet A/S
+# Copyright (c) 2015 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -32,26 +32,41 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
-"""
-the eduID API backend package
+import bson
+from eduid_api.request import BaseRequest
+from eduid_api.common import EduIDAPIError
 
-Copyright (c) 2013 NORDUnet A/S
-See the source file for complete license statement.
 
-This package is intended to be used through the WSGI application
-eduid_apibackend.
+class MFAAddRequest(BaseRequest):
 
-"""
+    """
+    :param json: JSON formatted request
+    :param logger: logging object
+    :param config: config object
+    :type json: basestring
+    :type logger: eduid_api.log.EduIDAPILogger
+    :type config: eduid_api.config.EduIDAPIConfig
+    """
 
-__version__ = '0.2'
-__copyright__ = 'NORDUnet A/S'
-__organization__ = 'NORDUnet'
-__license__ = 'BSD'
-__authors__ = ['Fredrik Thulin']
+    def __init__(self, json, logger, config):
+        BaseRequest.__init__(self, json, logger, config)
 
-import eduid_api.common
-import eduid_api.config
-import eduid_api.log
-import eduid_api.db
-import eduid_api.request
-import eduid_api.mfa_add
+        for req_field in ['data']:
+            if req_field not in self._parsed_req:
+                raise EduIDAPIError("No {!r} in request".format(req_field))
+
+        for req_data_field in ['email']:
+            if req_data_field not in self._parsed_req['data']:
+                raise EduIDAPIError("No {!r} in request[data]".format(req_data_field))
+
+        self._data = self._parsed_req['data']
+
+        if '_id' in self._data:
+            self._data['_id'] = bson.ObjectId(self._data['_id'])
+
+    def data(self):
+        """
+        Return the 'data' element from the request.
+        """
+        return self._data
+

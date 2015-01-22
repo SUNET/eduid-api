@@ -58,6 +58,13 @@ class EduIDAPILogger():
         self.logger = logging.getLogger(myname)
         if debug:
             self.logger.setLevel(logging.DEBUG)
+            import sys
+            sys.stderr.write("DEBUG")
+            # log to stderr when debugging
+            formatter = logging.Formatter('%(asctime)s %(name)s %(threadName)s: %(levelname)s %(message)s')
+            stream_h = logging.StreamHandler(sys.stderr)
+            stream_h.setFormatter(formatter)
+            self.logger.addHandler(stream_h)
         else:
             self.logger.setLevel(logging.INFO)
         if syslog:
@@ -73,6 +80,24 @@ class EduIDAPILogger():
         :type data: basestring
         """
         self.logger.info("AUDIT: {context}, {data}".format(context = self.context, data = data))
+
+    def debug(self, msg):
+        """
+        Log a debug message.
+
+        :param msg: Debug message
+        :type msg: basestring
+        """
+        self.logger.debug(msg)
+
+    def info(self, msg):
+        """
+        Log an informational message.
+
+        :param msg: message
+        :type msg: basestring
+        """
+        self.logger.info(msg)
 
     def warning(self, msg):
         """
