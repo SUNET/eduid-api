@@ -53,6 +53,7 @@ _CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig._
                     'cert_chain': None,        # SSL certificate chain filename, or None
                     'broker_url': 'amqp://',   # AMQP broker URL. See Celery documentation for details.
                     'keystore_fn': '',
+                    'jose_alg': 'RS256',       # JOSE signing algorithm
                     }
 
 _CONFIG_SECTION = 'eduid_api'
@@ -197,3 +198,12 @@ class EduIDAPIConfig():
         :rtype: basestring
         """
         return self.config.get(self.section, 'keystore_fn')
+
+    @property
+    def jose_alg(self):
+        """
+        JOSE signing algorithm.
+
+        :rtype: basestring
+        """
+        return self.config.get(self.section, 'jose_alg')

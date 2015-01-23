@@ -54,5 +54,6 @@ import eduid_api.config
 import eduid_api.log
 import eduid_api.db
 import eduid_api.request
+import eduid_api.response
 import eduid_api.mfa_add
 import eduid_api.keystore

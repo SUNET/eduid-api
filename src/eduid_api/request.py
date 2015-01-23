@@ -41,6 +41,7 @@ from eduid_api.common import EduIDAPIError
 
 _TESTING = False
 
+
 class BaseRequest():
     """
     Base request object. Handles decryption and verification of JOSE objects.
@@ -83,7 +84,7 @@ class BaseRequest():
 
         if parsed.get('version', 1) is not 1:
             # really handle missing version below
-            raise EduIDAPIError("Unknown request version : {!r}".format(parsed['version']))
+            raise EduIDAPIError("Unknown request version: {!r}".format(parsed['version']))
 
         for req_field in ['version']:
             if req_field not in parsed:
@@ -110,7 +111,7 @@ class BaseRequest():
         jwe = jose.deserialize_compact(request.replace("\n", ''))
 
         decrypted = None
-        decr_key = self._config.keys.private_key()
+        decr_key = self._config.keys.private_key
         if not decr_key:
             self._logger.error("No assymetric private key (named '_private') found in the keystore")
             return False

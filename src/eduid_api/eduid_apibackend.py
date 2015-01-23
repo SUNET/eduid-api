@@ -123,15 +123,11 @@ class APIBackend(object):
                        }
         self.logger.set_context(log_context)
 
-        # Parse request
-        req = eduid_api.mfa_add.MFAAddRequest(request, self.remote_ip, self.logger, self.config)
-
-        if not req.signing_key:
-            self.logger.info("Could not decrypt/authenticate request from {!r}".format(self.remote_ip))
-            cherrypy.response.status = 403
-            # Don't disclose anything about our internal issues
-            return None
-
+        # Parse request and handle any errors
+        fun = lambda: eduid_api.mfa_add.MFAAddRequest(request, self.remote_ip, self.logger, self.config)
+        success, req = self._parse_request(fun)
+        if not success:
+            return req
         self.logger.debug("Parsed and authenticated mfa_add request:\n{!r}".format(req))
 
 
@@ -206,6 +202,19 @@ class APIBackend(object):
                                          }
                     }
         return "{}\n".format(simplejson.dumps(response, sort_keys=True, indent=4))
+
+    def _parse_request(self, fun):
+        try:
+            req = fun()
+            if not req.signing_key:
+                self.logger.info("Could not decrypt/authenticate request from {!r}".format(self.remote_ip))
+                cherrypy.response.status = 403
+                # Don't disclose anything about our internal issues
+                return False, None
+            return True, req
+        except EduIDAPIError as ex:
+            res = eduid_api.response.ErrorResponse(ex.reason, self.logger, self.config)
+            return False, res.to_string(remote_ip = self.remote_ip)
 
 
 def main(myname = 'eduid_api'):

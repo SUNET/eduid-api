@@ -74,6 +74,7 @@ class KeyStore(object):
         res = [this for this in self._keys if ip in this.ip_addresses]
         return res
 
+    @property
     def private_key(self):
         """
         Get the private key for the API service (key named '_private').

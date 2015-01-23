@@ -59,8 +59,6 @@ class EduIDAPILogger():
         self.logger = logging.getLogger(myname)
         if debug:
             self.logger.setLevel(logging.DEBUG)
-            import sys
-            sys.stderr.write("DEBUG")
             # log to stderr when debugging
             formatter = logging.Formatter('%(asctime)s %(name)s %(threadName)s: %(levelname)s %(message)s')
             stream_h = logging.StreamHandler(sys.stderr)
