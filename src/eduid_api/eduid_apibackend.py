@@ -182,7 +182,7 @@ class APIBackend(object):
         self.logger.set_context(log_context)
 
         # Parse request
-        req = eduid_api.mfa_add.MFAAddRequest(request, self.logger, self.config)
+        req = eduid_api.mfa_add.MFAAddRequest(decrypted, self.logger, self.config)
         self.logger.debug("Parsed and authenticated mfa_add request:\n{!r}".format(req))
 
 

@@ -32,6 +32,7 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
+import sys
 import logging
 import logging.handlers
 import cherrypy

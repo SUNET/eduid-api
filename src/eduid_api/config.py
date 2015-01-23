@@ -36,11 +36,10 @@
 Configuration (file) handling for eduID API backend.
 """
 
-import simplejson
+import eduid_api.keystore
 import ConfigParser
-
-
 from eduid_api.common import EduIDAPIError
+
 
 _CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig.__init__()
                     'logdir': None,
@@ -81,7 +80,7 @@ class EduIDAPIConfig():
         tmp_add_raw_allow = str(self.config.get(self.section, 'add_raw_allow')) # for pylint
         self._parsed_add_raw_allow = \
             [x.strip() for x in tmp_add_raw_allow.split(',')]
-        self.keys = KeyStore(self.keystore_fn)
+        self.keys = eduid_api.keystore.KeyStore(self.keystore_fn)
 
     @property
     def logdir(self):
@@ -198,92 +197,3 @@ class EduIDAPIConfig():
         :rtype: basestring
         """
         return self.config.get(self.section, 'keystore_fn')
-
-
-class KeyStore(object):
-
-    """
-    The keystore contains client authentication and authorization information.
-    """
-
-    def __init__(self, keystore_fn):
-        if not keystore_fn:
-            self._keys = []
-            return None
-
-        try:
-            f = open(keystore_fn, 'r')
-            data = f.read()
-            f.close()
-            data = simplejson.loads(data)
-            assert (type(data) == dict)
-        except Exception as ex:
-            raise EduIDAPIError("Failed loading config file {!r}: {!r}".format(keystore_fn, ex))
-
-        self._keys = [APIKey(name, value) for (name, value) in data.items()]
-
-    def lookup_by_ip(self, ip):
-        """
-        Return all APIKeys matching the IP address supplied.
-
-        :param ip: IP address (of client presumably)
-        :type ip: basestring
-
-        :rtype: [APIKey()]
-        """
-        res = [this for this in self._keys if ip in this.ip_addresses]
-        return res
-
-
-class APIKey(object):
-    """
-    API key entrys contain sign/encrypt credentials and authorization information.
-    """
-    def __init__(self, name, data):
-        self._name = name
-        self._data = data
-
-    def __repr__(self):
-        return '<{cl} instance at {addr}: {name!r}, type={keytype!r}>'.format(
-            cl = self.__class__.__name__,
-            addr = hex(id(self)),
-            name = self._name,
-            keytype = self.keytype,
-        )
-
-    @property
-    def ip_addresses(self):
-        """
-        Get the list of IP addresses registered with this API key.
-
-        :return: List of IP addresses
-        :rtype: [basestring]
-        """
-        return self._data['ip_addresses']
-
-    @property
-    def keytype(self):
-        """
-        Get the type of API key. Typically 'jose'.
-
-        :return: API key type
-        :rtype: basestring
-        """
-        return self._data.get('keytype', 'jose')
-
-    @property
-    def expiry_seconds(self):
-        """
-        :return: Expire time in seconds
-        :rtype: int or None
-        """
-        return self._data.get('expiry_seconds')
-
-    @property
-    def jwk(self):
-        """
-        :return: JWK dict
-        :rtype: dict
-        """
-        return self._data.get('JWK')
-

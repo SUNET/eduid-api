@@ -98,9 +98,7 @@ def check_and_decrypt(request, remote_ip, name, config, logger):
     """
     try:
 
-        logger.debug("FREDRIK: JWE from {!r}".format(request))
-
-        jwe = jose.deserialize_compact(request)
+        jwe = jose.deserialize_compact(request.replace("\n", ''))
         keys = config.keys.lookup_by_ip(remote_ip)
 
         if not len(keys):
@@ -108,20 +106,49 @@ def check_and_decrypt(request, remote_ip, name, config, logger):
             return False
 
         decrypted = None
+        decr_key = config.keys.private_key()
+        if not decr_key:
+            logger.error("No assymetric private key (named '_private') found in the keystore")
+            return False
+
+        logger.debug("Trying to decrypt request with key {!r}".format(decr_key))
+        try:
+            decrypted = jose.decrypt(jwe, decr_key.jwk, expiry_seconds = decr_key.expiry_seconds)
+            logger.debug("Decrypted {!r}".format(decrypted))
+        except jose.Expired as ex:
+            logger.warning("Request encrypted with key {!r} has expired: {!r}".format(decr_key, ex))
+        except jose.Error as ex:
+            logger.warning("Failed decrypt with key {!r}: {!r}".format(decr_key, ex))
+            pass
+
+        if not 'v1' in decrypted.claims:
+            logger.error("Unknown contents of decrypted claims (no 'v1'): {!r}".format(decrypted))
+            return False
+        to_verify = jose.deserialize_compact(decrypted.claims['v1'])
+
+        #logger.debug("Decrypted claims to verify: {!r}".format(to_verify))
+        # Now, check for a valid signature
         for key in keys:
             if not key.keytype == 'jose':
                 logger.debug("Ignoring key {!r}".format(key))
                 continue
-            logger.debug("Trying to decrypt request with key {!r}".format(key))
             try:
-                logger.debug("FREDRIK: JWE {!r} from {!r}, JWK {!r}".format(jwe, request, key.jwk))
-                decrypted = jose.decrypt(jwe, key.jwk, expiry_seconds = key.expiry_seconds)
-            except jose.Expired:
-                logger.warning("Request encrypted with key {!r} has expired".format(key))
-            except jose.Error:
+                jwt = jose.verify(to_verify, key.jwk)
+                logger.info("Good signature on request from {!r} using key {!r}: {!r}".format(
+                    remote_ip, key, jwt
+                ))
+                return simplejson.dumps(jwt.claims)
+            except ValueError:
+                logger.debug("Ignoring key unusable with this algorithm: {!r}".format(key))
+                pass
+            except jose.Error as ex:
+                logger.debug("Tried verifying signature using key {!r}: {!r}".format(key, ex))
                 pass
 
-        return decrypted
+        logger.warning("Failed verifying signature on requset from {!r} using keys {!r}".format(
+            remote_ip, keys
+        ))
+        return False
     except Exception:
         logger.error("check_and_decrypt failed", traceback = True)
         return False

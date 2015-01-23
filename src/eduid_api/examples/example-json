@@ -5,33 +5,34 @@
 # $ ./example-json | curl --data-urlencode request@- -v localhost:8511/mfa_add
 #
 #
-# Test key generated with
-# >>> from Crypto.PublicKey import RSA
-# >>> key = RSA.generate(1024)
-# >>> print key.publickey().exportKey('PEM')
-# >>> print key.exportKey('PEM')
 
 import sys
 import json
 import jose
 import time
 
-JWK = {'k': 'password',
-       }
+with open('example-server-cert.pem') as fd:
+    jwk = {'k': fd.read(),
+           }
 
-a = {'twofa_add':
-         {
-        'data': {
-            "sn": "Thulin",
-            "givenName": "Fredrik",
-            },
-        },
-     'version': 1,
-     }
+with open('example.key') as fd:
+    priv_jwk = {'k': fd.read(),
+                }
 
-sys.stderr.write(json.dumps(a, sort_keys=True, indent=4) + '\n')
+claims = {'foo': 'bar',
+          'version': 1,
+          'data': {},
+          }
 
-jwe = jose.encrypt({'foo': 'bar'}, JWK)
+sys.stderr.write(json.dumps(claims, sort_keys=True, indent=4) + '\n')
 
-print ""
+jws = jose.sign(claims, priv_jwk, alg='RS256')
+sys.stderr.write("JWS before serialization:\n{!r}\n\n".format(jws))
+signed_claims = {'v1': jose.serialize_compact(jws)}
+sys.stderr.write("Signed claims:\n{!r}\n\n\n".format(signed_claims))
+
+jwe = jose.encrypt(signed_claims, jwk)
+
+sys.stderr.write("Encrypted using JWK:\n{!r}\n\nResulting JWE:\n{!r}\n\n".format(jwk, jwe))
+
 print jose.serialize_compact(jwe)
