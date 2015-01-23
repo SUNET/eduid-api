@@ -84,54 +84,6 @@ def parse_args():
     return parser.parse_args()
 
 
-class AddRawRequest(eduid_api.request.BaseRequest):
-
-    """
-    Parse JSON body into 'add raw' request object.
-
-    Example (request) body :
-
-    {
-        "add_raw": {
-            "data": {
-                "email": "ft@example.net",
-                "verified": true
-            }
-        },
-        "version": 1
-    }
-
-    :param json: JSON formatted request
-    :param logger: logging object
-    :param config: config object
-    :type json: basestring
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
-    """
-
-    def __init__(self, json, logger, config):
-        eduid_api.request.BaseRequest.__init__(self, json, logger, config)
-
-        for req_field in ['data']:
-            if req_field not in self._parsed_req:
-                raise EduIDAPIError("No {!r} in request".format(req_field))
-
-        for req_data_field in ['email']:
-            if req_data_field not in self._parsed_req['data']:
-                raise EduIDAPIError("No {!r} in request[data]".format(req_data_field))
-
-        self._data = self._parsed_req['data']
-
-        if '_id' in self._data:
-            self._data['_id'] = bson.ObjectId(self._data['_id'])
-
-    def data(self):
-        """
-        Return the 'data' element from the request.
-        """
-        return self._data
-
-
 class APIBackend(object):
     """
     The CherryPy application object.
@@ -162,27 +114,24 @@ class APIBackend(object):
         Add a 2FA credential to the 2fa database.
 
         :param request: JSON formatted request
-        :type request: basestring
+        :type request: str
         """
         self.remote_ip = cherrypy.request.remote.ip
-
         self.logger.debug("Parsing mfa_add request from {!r}".format(self.remote_ip))
-
-        decrypted = eduid_api.request.check_and_decrypt(request, self.remote_ip, 'mfa_add', self.config, self.logger)
-
-        if not decrypted:
-            self.logger.info("Could not decrypt/authenticate request from {!r}".format(self.remote_ip))
-            cherrypy.response.status = 403
-            # Don't disclose anything about our internal issues
-            return None
-
         log_context = {'client': self.remote_ip,
                        'req': 'mfa_add',
                        }
         self.logger.set_context(log_context)
 
         # Parse request
-        req = eduid_api.mfa_add.MFAAddRequest(decrypted, self.logger, self.config)
+        req = eduid_api.mfa_add.MFAAddRequest(request, self.remote_ip, self.logger, self.config)
+
+        if not req.signing_key:
+            self.logger.info("Could not decrypt/authenticate request from {!r}".format(self.remote_ip))
+            cherrypy.response.status = 403
+            # Don't disclose anything about our internal issues
+            return None
+
         self.logger.debug("Parsed and authenticated mfa_add request:\n{!r}".format(req))
 
 

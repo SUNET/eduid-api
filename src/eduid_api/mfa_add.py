@@ -32,7 +32,6 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
-import bson
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
 
@@ -40,16 +39,16 @@ from eduid_api.common import EduIDAPIError
 class MFAAddRequest(BaseRequest):
 
     """
-    :param json: JSON formatted request
+    :param request: JSON formatted request
     :param logger: logging object
     :param config: config object
-    :type json: basestring
+    :type request: str
     :type logger: eduid_api.log.EduIDAPILogger
     :type config: eduid_api.config.EduIDAPIConfig
     """
 
-    def __init__(self, json, logger, config):
-        BaseRequest.__init__(self, json, logger, config)
+    def __init__(self, request, remote_ip, logger, config):
+        BaseRequest.__init__(self, request, remote_ip, 'mfa_add', logger, config)
 
         for req_field in ['data']:
             if req_field not in self._parsed_req:
@@ -61,9 +60,8 @@ class MFAAddRequest(BaseRequest):
 
         self._data = self._parsed_req['data']
 
-        if '_id' in self._data:
-            self._data['_id'] = bson.ObjectId(self._data['_id'])
 
+    @property
     def data(self):
         """
         Return the 'data' element from the request.
