@@ -2,14 +2,18 @@
 #
 # Produce example JSON to be POSTed to API backend
 #
-# $ ./example-json | curl --data-urlencode request@- -v localhost:8511/mfa_add
+# $ ./example-json http://localhost:8511/mfa_add
 #
 #
 
 import sys
 import json
 import jose
-import time
+import requests
+
+url = 'http://localhost:8511/mfa_add'
+if len(sys.argv) > 1:
+    url = sys.argv[1]
 
 with open('example-server-cert.pem') as fd:
     jwk = {'k': fd.read(),
@@ -24,15 +28,59 @@ claims = {'foo': 'bar',
           'data': {},
           }
 
-sys.stderr.write(json.dumps(claims, sort_keys=True, indent=4) + '\n')
 
-jws = jose.sign(claims, priv_jwk, alg='RS256')
-sys.stderr.write("JWS before serialization:\n{!r}\n\n".format(jws))
-signed_claims = {'v1': jose.serialize_compact(jws)}
-sys.stderr.write("Signed claims:\n{!r}\n\n\n".format(signed_claims))
+def sign_and_encrypt(claims, priv_jwk, alg = 'RS256'):
+    jws = jose.sign(claims, priv_jwk, alg=alg)
+    sys.stderr.write("JWS before serialization:\n{!r}\n\n".format(jws))
+    signed_claims = {'v1': jose.serialize_compact(jws)}
+    sys.stderr.write("Signed claims:\n{!r}\n\n\n".format(signed_claims))
+    jwe = jose.encrypt(signed_claims, jwk)
+    return jwe
 
-jwe = jose.encrypt(signed_claims, jwk)
+def decrypt_and_verify(plaintext, decr_key, signing_key):
+    jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
+    decrypted = jose.decrypt(jwe, decr_key)
+    sys.stderr.write("Decrypted {!r}".format(decrypted))
+    if not 'v1' in decrypted.claims:
+        sys.stderr.write("No 'v1' in decrypted claims: {!r}\n\n".format(decrypted))
+        return False
+    to_verify = jose.deserialize_compact(decrypted.claims['v1'])
+    sys.stderr.write("Decrypted claims to verify: {!r}\n\n".format(to_verify))
 
-sys.stderr.write("Encrypted using JWK:\n{!r}\n\nResulting JWE:\n{!r}\n\n".format(jwk, jwe))
+    jwt = jose.verify(to_verify, signing_key)
+    sys.stderr.write("Good signature on request using key {!r}: {!r}\n\n".format(
+        signing_key, jwt
+    ))
+    return jwt
 
-print jose.serialize_compact(jwe)
+def main():
+    sys.stderr.write(json.dumps(claims, sort_keys=True, indent=4) + '\n')
+
+    jwe = sign_and_encrypt(claims, priv_jwk)
+
+    sys.stderr.write("Encrypted using JWK:\n{!r}\n\nResulting JWE:\n{!r}\n\n".format(jwk, jwe))
+    sys.stderr.write("Serialized:\n{!r}\n\n".format(jose.serialize_compact(jwe)))
+
+    sys.stderr.write("-" * 80)
+    sys.stderr.write("\nPOSTing request to {!r}\n\n".format(url))
+
+    r = requests.post(url, data=dict(request=jose.serialize_compact(jwe)))
+
+    sys.stderr.write("Response from server: {!r}\n".format(r))
+    sys.stderr.write(r.text)
+    sys.stderr.write("\n\n")
+
+    plaintext = decrypt_and_verify(r.text, priv_jwk, jwk)
+
+    sys.stderr.write("Decrypted and verified response:\n{!r}\n\n".format(plaintext))
+
+    sys.stderr.write(json.dumps(plaintext.claims, sort_keys=True, indent=4) + '\n')
+
+
+if __name__ == '__main__':
+    try:
+        if main():
+            sys.exit(0)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(0)
