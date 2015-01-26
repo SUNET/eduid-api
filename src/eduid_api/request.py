@@ -113,7 +113,7 @@ class BaseRequest():
         decrypted = None
         decr_key = self._config.keys.private_key
         if not decr_key:
-            self._logger.error("No assymetric private key (named '_private') found in the keystore")
+            self._logger.error("No asymmetric private key (named '_private') found in the keystore")
             return False
 
         self._logger.debug("Trying to decrypt request with key {!r}".format(decr_key))
