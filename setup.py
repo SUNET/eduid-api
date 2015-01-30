@@ -21,6 +21,7 @@ requires = [
     'cherrypy == 3.6.0',
     'simplejson == 3.6.5',
     'jose == 0.2.2',
+    'vccs_client==0.4.1',
 ]
 
 

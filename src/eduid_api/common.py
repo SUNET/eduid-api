@@ -50,3 +50,19 @@ class EduIDAPIError(Exception):
             addr = hex(id(self)),
             reason = self.reason,
         )
+
+
+class APIAuthenticationError(Exception):
+    """
+    Authentication backend Exception class.
+    """
+    def __init__(self, reason):
+        Exception.__init__(self)
+        self.reason = reason
+
+    def __str__(self):
+        return '<{cl} instance at {addr}: {reason!r}>'.format(
+            cl = self.__class__.__name__,
+            addr = hex(id(self)),
+            reason = self.reason,
+        )

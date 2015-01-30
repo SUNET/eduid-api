@@ -57,3 +57,5 @@ import eduid_api.request
 import eduid_api.response
 import eduid_api.mfa_add
 import eduid_api.keystore
+import eduid_api.authstore
+import eduid_api.authuser

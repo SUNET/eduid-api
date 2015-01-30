@@ -54,6 +54,7 @@ _CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig._
                     'broker_url': 'amqp://',   # AMQP broker URL. See Celery documentation for details.
                     'keystore_fn': '',
                     'jose_alg': 'RS256',       # JOSE signing algorithm
+                    'vccs_base_url': 'http://localhost:8550/',
                     }
 
 _CONFIG_SECTION = 'eduid_api'
@@ -78,7 +79,7 @@ class EduIDAPIConfig():
         if not self.config.read([filename]):
             raise EduIDAPIError("Failed loading config file {!r}".format(filename))
         # split on comma and strip. cache result.
-        tmp_add_raw_allow = str(self.config.get(self.section, 'add_raw_allow')) # for pylint
+        tmp_add_raw_allow = str(self.config.get(self.section, 'add_raw_allow'))  # for pylint
         self._parsed_add_raw_allow = \
             [x.strip() for x in tmp_add_raw_allow.split(',')]
         self.keys = eduid_api.keystore.KeyStore(self.keystore_fn)
@@ -88,7 +89,7 @@ class EduIDAPIConfig():
         """
         Path to CherryPy logfiles. Something like '/var/log/eduid' maybe.
 
-        :rtype: basestring or None
+        :rtype: str | unicode | None
         """
         res = self.config.get(self.section, 'logdir')
         if not res:
@@ -207,3 +208,21 @@ class EduIDAPIConfig():
         :rtype: basestring
         """
         return self.config.get(self.section, 'jose_alg')
+
+    @property
+    def vccs_base_url(self):
+        """
+        VCCS authentication backend service base URL.
+
+        :rtype: basestring
+        """
+        return self.config.get(self.section, 'vccs_base_url')
+
+    @property
+    def oathmgr_base_url(self):
+        """
+        OATH manager service base URL.
+
+        :rtype: basestring
+        """
+        return self.config.get(self.section, 'oathmgr_base_url')

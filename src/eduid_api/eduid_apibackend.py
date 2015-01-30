@@ -89,24 +89,31 @@ class APIBackend(object):
     The CherryPy application object.
     """
 
-    def __init__(self, logger, db, config, expose_real_errors=False):
+    def __init__(self, logger, db, authstore, config, expose_real_errors=False):
         """
         :param logger: logging object (for audit logs)
         :param db: database object
+        :param authstore: Credential store
         :param config: config object
         :param expose_real_errors: mask errors or expose them (for devel/debug/test)
         :type logger: eduid_api.log.EduIDAPILogger
         :type db: eduid_api.db.EduIDAPIDB
+        :type authstore: eduid_api.authstore.APIAuthStore
         :type config: eduid_api.config.EduIDAPIConfig
         :type expose_real_errors: bool
 
         """
         self.logger = logger
         self.db = db
+        self.authstore = authstore
         self.config = config
         self.expose_real_errors = expose_real_errors
         # make pylint happy
         self.remote_ip = 'UNKNOWN'
+
+        cherrypy.config.update({'request.error_response': self.handle_error,
+                                'error_page.default': self.error_page_default,
+                                })
 
     @cherrypy.expose
     def mfa_add(self, request=None):
@@ -130,78 +137,10 @@ class APIBackend(object):
             return req
         self.logger.debug("Parsed and authenticated mfa_add request:\n{!r}".format(req))
 
+        response = eduid_api.mfa_add.add_token(req, self.authstore, self.logger, self.config)
 
-    @cherrypy.expose
-    def add_raw(self, request=None):
-        """
-        Add an entry to the user database.
-
-        :param request: JSON formatted request
-        :type request: basestring
-        """
-        self.remote_ip = cherrypy.request.remote.ip
-
-        decrypted = eduid_api.request.check_and_decrypt(request, self.remote_ip, 'add_raw', self.config, self.logger)
-
-        if not decrypted:
-            cherrypy.response.status = 403
-            # Don't disclose anything about our internal issues
-            return None
-
-        log_context = {'client': self.remote_ip,
-                       'req': 'add_raw',
-                       }
-        self.logger.set_context(log_context)
-
-        # Parse request
-        req = AddRawRequest(request, self.logger, self.config)
-
-        docu = req.data()
-        result = False
-        data = ''
-
-        # check if email already exists in the database (NB. The eduid_api database, not eduid_am).
-        existing = self.db.users.find({'email': docu['email']})
-        if existing.count() > 1:
-            data = 'multiple records found for email {!r}'.format(docu['email'])
-        elif existing.count() and existing[0]['_id'] != docu.get('_id'):
-            data = 'email {!r} already exist (_id {!s})'.format(docu['email'], existing[0]['_id'])
-        else:
-            # save in mongodb
-            try:
-                self.db.users.save(docu, manipulate=True, safe=True)
-            except pymongo.errors.PyMongoError as exception:
-                data = str(exception)
-            else:
-                data = 'OK'
-                result = True
-
-        docu_id = str(docu.get('_id'))
-        self.logger.audit("result={!s},data={!s},_id={!s}".format(result, data, docu_id))
-
-        if type(result) == int:
-            cherrypy.response.status = result
-            # Don't disclose anything on our internal failures
-            return None
-
-        if result:
-            # Send the signal to the attribute manager so it can update
-            # this user's attributes in the IdP
-            try:
-                update_attributes.delay('eduid_api', str(docu_id))
-            except Exception as exception:
-                self.logger.error("Failed signalling update_attributes : {!s}".format(exception), traceback=True)
-                # XXX maybe the document should be removed and a failure returned instead?
-                data = 'Stored, but update_attributes failed'
-
-        # _id should be set now, since manipulate=True
-        response = {'add_raw_response': {'version': 1,
-                                         'success': result,
-                                         'data': data,
-                                         '_id': docu_id,
-                                         }
-                    }
-        return "{}\n".format(simplejson.dumps(response, sort_keys=True, indent=4))
+        res = eduid_api.response.BaseResponse(response, self.logger, self.config)
+        return res.to_string(remote_ip = self.remote_ip)
 
     def _parse_request(self, fun):
         try:
@@ -215,6 +154,42 @@ class APIBackend(object):
         except EduIDAPIError as ex:
             res = eduid_api.response.ErrorResponse(ex.reason, self.logger, self.config)
             return False, res.to_string(remote_ip = self.remote_ip)
+
+    def handle_error(self):
+        """
+        Function called by CherryPy when there is an unhandled exception processing a request.
+
+        Display a 'fail whale' page (error.html), and log the error in a way that makes
+        post-mortem analysis in Sentry as easy as possible.
+        """
+        self.logger.debug("handle_error() invoked")
+        cherrypy.response.status = 500
+        res = eduid_api.response.ErrorResponse('Server Error #1', self.logger, self.config)
+        cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
+
+
+    def error_page_default(self, status, message, traceback, version):
+        """
+        Function called by CherryPy when there is an unhandled exception processing a request.
+
+        Display a 'fail whale' page (error.html), and log the error in a way that makes
+        post-mortem analysis in Sentry as easy as possible.
+
+        :param status: HTML error code like '404 Not Found'
+        :param message: HTML error message
+        :param traceback: traceback of error
+        :param version: cherrypy version
+
+        :type status: string
+        :type message: string
+        :type traceback: string
+        :type version: string
+        :rtype: string
+        """
+        self.logger.debug("error_page_default() invoked, status={!r}, message={!r}".format(status, message))
+        cherrypy.response.status = 500
+        res = eduid_api.response.ErrorResponse('Server Error #2', self.logger, self.config)
+        cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
 
 
 def main(myname = 'eduid_api'):
@@ -230,12 +205,14 @@ def main(myname = 'eduid_api'):
     config = eduid_api.config.EduIDAPIConfig(args.config_file, args.debug)
     logger = eduid_api.log.EduIDAPILogger(myname, debug = config.debug)
     db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
+    authstore = eduid_api.authstore.APIAuthStoreMongoDB(config.mongodb_uri, logger)
 
     cherry_conf = {'server.socket_host': config.listen_addr,
                    'server.socket_port': config.listen_port,
                    # enables X-Forwarded-For, since BCP is to run this server
                    # behind a webserver that handles SSL
                    'tools.proxy.on': True,
+                   'request.show_tracebacks': config.debug,
                    }
     if config.logdir:
         cherry_conf['log.access_file'] = os.path.join(config.logdir, 'access.log')
@@ -256,7 +233,7 @@ def main(myname = 'eduid_api'):
     else:
         logger.warning("Config option 'broker_url' not set. AMQP notifications will not work.")
 
-    cherrypy.quickstart(APIBackend(logger, db, config))
+    cherrypy.quickstart(APIBackend(logger, db, authstore, config))
 
 if __name__ == '__main__':
     try:

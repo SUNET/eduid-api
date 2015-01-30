@@ -6,6 +6,7 @@
 #
 #
 
+import os
 import sys
 import json
 import jose
@@ -23,9 +24,15 @@ with open('example.key') as fd:
     priv_jwk = {'k': fd.read(),
                 }
 
-claims = {'foo': 'bar',
-          'version': 1,
-          'data': {},
+nonce = os.urandom(10)
+
+claims = {'version': 1,
+          'token_type': 'OATH',
+          'nonce': nonce.encode('hex'),
+          'OATH': {'digits': 6,
+                   'issuer': 'TestIssuer',
+                   'account': 'user@example.org',
+                   }
           }
 
 
@@ -68,7 +75,7 @@ def main():
 
     sys.stderr.write("Response from server: {!r}\n".format(r))
     sys.stderr.write(r.text)
-    sys.stderr.write("\n\n")
+    sys.stderr.write("---\n\n")
 
     plaintext = decrypt_and_verify(r.text, priv_jwk, jwk)
 
