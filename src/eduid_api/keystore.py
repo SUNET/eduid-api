@@ -33,6 +33,22 @@
 #
 """
 Crypto keystore for eduID API backend.
+
+Every system sending requets to the eduID API need to have a JOSE
+public key in our keystore.
+
+Example keystore:
+
+    {"test1": {"JWK": {"file": "/opt/eduid/etc/test-client.pem"},
+               "ip_addresses": ["192.0.2.111"]
+              },
+
+     "_private": {"JWK": {"file": "/opt/eduid/etc/api-snakeoil.key"},
+                  "ip_addresses": []
+                 }
+    }
+
+The eduID API service's private key need to be provided in the special "_private" entry.
 """
 
 import simplejson
@@ -43,7 +59,7 @@ from eduid_api.common import EduIDAPIError
 class KeyStore(object):
 
     """
-    The keystore contains client authentication and authorization information.
+    The keystore contains API client authentication and authorization information.
     """
 
     def __init__(self, keystore_fn):

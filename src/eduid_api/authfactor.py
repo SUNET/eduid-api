@@ -228,7 +228,9 @@ def factor_from_dict(data, factor_type=None):
 
 
 class EduIDAuthFactorList(object):
-
+    """
+    Hold a list of authentication factors.
+    """
     def __init__(self, factors):
         self.factors = []
 
@@ -240,7 +242,18 @@ class EduIDAuthFactorList(object):
             self.factors.append(factor)
 
     def to_list(self):
+        """
+        Return the list of factors as an iterable.
+        :return: List of factors
+        :rtype: list
+        """
         return self.factors
 
     def to_list_of_dicts(self):
+        """
+        Get the factors in a serialized format that can be stored in MongoDB.
+
+        :return: List of dicts
+        :rtype: [dict]
+        """
         return [this.to_dict() for this in self.factors]

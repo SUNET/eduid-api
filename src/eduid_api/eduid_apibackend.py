@@ -118,7 +118,25 @@ class APIBackend(object):
     @cherrypy.expose
     def mfa_add(self, request=None):
         """
-        Add a 2FA credential to the 2fa database.
+        Create a new MultiFactor Authentication token for someone.
+
+        Example OATH request POSTed to /mfa_add:
+
+            {
+                "version":    1,
+                "nonce":      "74b4a9a07084799548e5",
+                "token_type": "OATH",
+
+                "OATH": {
+                    "type":    "oath-totp",
+                    "account": "user@example.org",
+                    "digits":  6,
+                    "issuer":  "TestIssuer"
+                }
+            }
+
+        The 'nonce' has nothing to do with the token - it allows the API client to
+        ensure that a response is in fact related to a specific request.
 
         :param request: JSON formatted request
         :type request: str
@@ -143,6 +161,13 @@ class APIBackend(object):
         return res.to_string(remote_ip = self.remote_ip)
 
     def _parse_request(self, fun):
+        """
+        Generic request parser wrapper to handle errors during parsing in a uniform way.
+
+        :param fun: Function that will parse the request
+        :type fun: callable
+        :return: Parsed data
+        """
         try:
             req = fun()
             if not req.signing_key:
@@ -166,7 +191,6 @@ class APIBackend(object):
         cherrypy.response.status = 500
         res = eduid_api.response.ErrorResponse('Server Error #1', self.logger, self.config)
         cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
-
 
     def error_page_default(self, status, message, traceback, version):
         """

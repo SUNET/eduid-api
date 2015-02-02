@@ -44,17 +44,43 @@ _VALID_STATUS_VALUES = ['enabled', 'disabled']
 
 
 class APIAuthUserError(APIAuthenticationError):
+    """
+    Error regarding APIAuthUser instances.
+    """
     pass
 
 
 class APIAuthUser():
+    """
+    Represents the data kept in the eduid-API private authstore.
 
+    Example data for a user:
+
+        {
+            "_id" : ObjectId("54cf8ee38a5da5000e0e2948"),
+            "revision" : 1,
+            "authuser" : {
+                    "status" : "enabled",
+                    "factors" : [
+                            {
+                                    "created_ts" : ISODate("2015-02-02T14:51:15.005Z"),
+                                    "type" : "oath-totp",
+                                    "id" : "54cf8ee28a5da5000e0e2947",
+                                    "created_by" : "eduid-api"
+                            }
+                    ]
+            }
+        }
+
+    The 'revision' is to provide atomic updates of the actual content which is below 'authuser'.
+    """
     def __init__(self, data, metadata, check_enabled):
         self._data = data
         self._metadata = metadata
         # validate known data
         self.status = data['status']
         self.factors = EduIDAuthFactorList(data['factors'])
+
         if check_enabled and self.status != 'enabled':
             raise APIAuthUserError("Disabled authuser requested")
 
@@ -88,19 +114,22 @@ class APIAuthUser():
         Convert authuser to a dict, that can be used to reconstruct the
         authuser later.
         """
+        self._data['factors'] = self.factors.to_list_of_dicts()
         return self._data
 
 
-def from_dict(data, metadata, check_enabled=True):
+def from_dict(data, metadata = None, check_enabled=True):
     """
     Create a suitable APIAuthUser object based on the 'type' of 'data'.
 
     :param data: dict with authuser data - probably from a database
-    :param metadata: opaque data about this authuser
+    :param metadata: opaque data about this authuser (default: {})
     :param check_enabled: boolean controlling check of authuser status after creation
 
     :type data: dict
     :type check_enabled: bool
     :rtype: APIAuthUser
     """
+    if not metadata:
+        metadata = {}
     return APIAuthUser(data, metadata, check_enabled)

@@ -80,7 +80,7 @@ class APIAuthStore():
         """
         raise NotImplementedError("Subclass should implement add_credential")
 
-    def update_credential(self, user, safe=True):
+    def update_authuser(self, user, safe=True):
         """
         Update an existing credential in the database.
 
@@ -103,8 +103,9 @@ class APIAuthStoreMongoDB(APIAuthStore):
      }
     """
 
-    def __init__(self, uri, logger, conn=None, db_name="api_authstore", retries=10, **kwargs):
+    def __init__(self, uri, logger, conn=None, db_name="eduid_api", retries=10, **kwargs):
         APIAuthStore.__init__(self)
+        self._logger = logger
         if conn is not None:
             self.connection = conn
         else:
@@ -116,7 +117,7 @@ class APIAuthStoreMongoDB(APIAuthStore):
         self.coll = self.db['authusers']
         for this in xrange(retries):
             try:
-                self.coll.ensure_index('authuser.user_id', name='user_id_idx', unique=True)
+                self.coll.ensure_index([('authuser.factors.id', 1)], name='factor_id_idx', unique=True)
                 break
             except (pymongo.errors.AutoReconnect, bson.errors.InvalidDocument) as exc:
                 # InvalidDocument: When eduid-API starts at the same time as MongoDB (e.g. on reboot),
@@ -143,6 +144,7 @@ class APIAuthStoreMongoDB(APIAuthStore):
         """
         if not isinstance(user_id, basestring):
             raise TypeError("non-string user_id")
+        self._logger.debug("Get authuser {!r}".format(user_id))
         query = {'authuser.user_id': str(user_id)}
         res = self.coll.find_one(query)
         if res is None:
@@ -151,8 +153,8 @@ class APIAuthStoreMongoDB(APIAuthStore):
                     'revision': res['revision'],
                     }
         cred = eduid_api.authuser.from_dict(res['authuser'],
-                                            metadata,
-                                            check_enabled =check_revoked,
+                                            metadata = metadata,
+                                            check_enabled = check_revoked,
                                             )
         return cred
 
@@ -168,6 +170,7 @@ class APIAuthStoreMongoDB(APIAuthStore):
         docu = {'revision': 1,
                 'authuser': user.to_dict(),
                 }
+        self._logger.debug("Add authuser:\n{!r}".format(docu))
         try:
             res = self.coll.insert(docu)
             if isinstance(res, bson.ObjectId):
@@ -176,7 +179,7 @@ class APIAuthStoreMongoDB(APIAuthStore):
         except pymongo.errors.DuplicateKeyError:
             return False
 
-    def update_credential(self, user, safe=True):
+    def update_authuser(self, user, safe=True):
         """
         Update an existing user in the MongoDB collection.
 
@@ -195,5 +198,6 @@ class APIAuthStoreMongoDB(APIAuthStore):
         data = {'revision': metadata['revision'] + 1,
                 'authuser': user.to_dict(),
                 }
+        self._logger.debug("Update authuser:\n{!r}".format(data))
         # XXX this function should return True on success
         return self.coll.update(spec, {'$set': data}, safe=safe)

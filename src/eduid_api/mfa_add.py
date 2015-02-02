@@ -40,15 +40,34 @@ import vccs_client
 import eduid_api.authuser
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
-from eduid_api.authfactor import EduIDAuthFactorList
 
 import qrcode
 import qrcode.image.svg
 import StringIO
 
-class MFAAddRequest(BaseRequest):
 
+class MFAAddRequest(BaseRequest):
     """
+    Base request to handle adding a MFA (Multi Factor Authentication) token.
+
+    Example OATH request POSTed to /mfa_add:
+
+        {
+            "version":    1,
+            "nonce":      "74b4a9a07084799548e5",
+            "token_type": "OATH",
+
+            "OATH": {
+                "type":    "oath-totp",
+                "account": "user@example.org",
+                "digits":  6,
+                "issuer":  "TestIssuer"
+            }
+        }
+
+    The 'nonce' has nothing to do with the token - it allows the API client to
+    ensure that a response is in fact related to a specific request.
+
     :param request: JSON formatted request
     :param logger: logging object
     :param config: config object
@@ -94,11 +113,18 @@ class MFAAddRequest(BaseRequest):
 
 
 class OATHTokenRequest(object):
-
     """
-    foo
-    """
+    Parse the 'OATH' part of an MFA add request.
 
+    Example parsed_req:
+
+        {
+            "type":    "oath-totp",
+            "account": "user@example.org",
+            "digits":  6,
+            "issuer":  "TestIssuer"
+        }
+    """
     def __init__(self, parsed_req):
         self._parsed_req = parsed_req
         for req_field in ['digits', 'issuer', 'account']:
@@ -172,9 +198,12 @@ class OATHTokenRequest(object):
 class U2FTokenRequest(object):
 
     """
-    foo
-    """
+    Parse the 'OATH' part of an MFA add request.
 
+    Example parsed_req:
+
+    """
+    # XXX add example parsed_req above
     def __init__(self, parsed_req):
         self._parsed_req = parsed_req
         for req_field in ['appId', 'challenge', 'clientData', 'registrationData', 'version']:
@@ -228,6 +257,11 @@ class U2FTokenRequest(object):
 
 
 class OATHAEAD:
+    """
+    Contact AEAD generation service and generate a new AEAD
+    for an OATH credential.
+    """
+    # XXX this is currently mocked with just random data!
     plaintext = os.urandom(20).encode('hex')
     aead = os.urandom(28).encode('hex')
     nonce = os.urandom(6).encode('hex')
@@ -265,19 +299,23 @@ class AddTokenAction(object):
         self._factor = None
 
     def add_to_authbackend(self):
+        """
+        Ask VCCS credential backend to store a new credential.
+        """
         self._logger.debug("Adding token of type {!r} to authbackend".format(self._request.token_type))
         if self._request.token_type == 'OATH':
             self._get_oath_aead()
-            for attr in dir(self):
-                self._logger.debug("ATTR {!r}: {!r}".format(attr, getattr(self, attr)))
+            # dump all attributes on self to logger
+            #for attr in dir(self):
+            #    self._logger.debug("ATTR {!r}: {!r}".format(attr, getattr(self, attr)))
             self._factor = vccs_client.VCCSOathFactor(
                 'oath-totp',
                 str(self._token_id),
-                nonce=self.aead.nonce,
-                aead=self.aead.aead,
-                key_handle=self.aead.key_handle,
-                digits=self._request.token.digits,
-                oath_counter=self._request.token.initial_counter,
+                nonce = self.aead.nonce,
+                aead = self.aead.aead,
+                key_handle = self.aead.key_handle,
+                digits = self._request.token.digits,
+                oath_counter = self._request.token.initial_counter,
                 )
         else:
             raise NotImplemented()
@@ -288,6 +326,10 @@ class AddTokenAction(object):
         self._status = True
 
     def add_to_authstore(self):
+        """
+        Store information about this credential in the authstore (eduid-API private database).
+        :return: None
+        """
         factors = [{
             'id': self._token_id,
             'type': 'oath-totp',
@@ -298,11 +340,21 @@ class AddTokenAction(object):
             'factors': factors,
         }
         self._logger.debug("Adding user to authstore: {!r}".format(user_dict))
-        user = eduid_api.authuser.from_dict(user_dict, {})
+        user = eduid_api.authuser.from_dict(user_dict)
         self._logger.debug("AuthUser: {!r}".format(user))
         self._authstore.add_authuser(user)
 
     def response(self):
+        """
+        Create a response dict to be returned (JSON formatted) to the API client.
+
+        If this is an OK response for an OATH token, this involves creating a
+        QR code image with the plaintext key etc. to facilitate provisioning of
+        smart phone apps such as Google Authenticator.
+
+        :return: Response
+        :rtype: dict
+        """
         res = {'status': 'ERROR'}
         if self._status:
             res['status'] = 'OK'
@@ -310,9 +362,6 @@ class AddTokenAction(object):
         if isinstance(self._request.token, OATHTokenRequest):
             if self._status:
                 key_uri = self._request.token.key_uri(self.aead)
-                #qr_factory = qrcode.image.svg.SvgPathImage
-                #buf = StringIO.StringIO()
-                #qrcode.make(key_uri, image_factory = qr_factory).save(buf)
                 buf = StringIO.StringIO()
                 qrcode.make(key_uri).save(buf)
                 res['OATH'] = {'hmac_key': self.aead.plaintext,
@@ -323,6 +372,13 @@ class AddTokenAction(object):
         return res
 
     def _get_oath_aead(self):
+        """
+        Since OATH credentials would be useless unless we can communicate the HMAC key to
+        the user, we can't just ask the VCCS backend to generate the credential and just
+        give us a reference. Instead, we have to ask an OATH AEAD generating service to
+        generate the OATH AEAD that will later on be usable for authenticating the user,
+        but also give us the actual HMAC key.
+        """
         # XXX this needs to contact an OATH AEAD generator API somewhere!!!
         self.aead = OATHAEAD()
 
