@@ -34,12 +34,17 @@
 
 import os
 import bson
+import base64
 import vccs_client
 
 import eduid_api.authuser
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
 from eduid_api.authfactor import EduIDAuthFactorList
+
+import qrcode
+import qrcode.image.svg
+import StringIO
 
 class MFAAddRequest(BaseRequest):
 
@@ -98,7 +103,18 @@ class OATHTokenRequest(object):
         self._parsed_req = parsed_req
         for req_field in ['digits', 'issuer', 'account']:
             if req_field not in self._parsed_req:
-                raise EduIDAPIError("No {!r} in token".format(req_field))
+                raise EduIDAPIError("No {!r} in 'OATH' part of request".format(req_field))
+        if self.type not in ['hotp', 'totp']:
+            raise EduIDAPIError("Invalid type in 'OATH' part of request")
+
+    @property
+    def type(self):
+        """
+        OATH type - currently supported are 'hotp' (event based) and 'totp' (time based).
+
+        :rtype: int
+        """
+        return self._parsed_req.get('type', 'totp')
 
     @property
     def digits(self):
@@ -136,6 +152,22 @@ class OATHTokenRequest(object):
         """
         return self._parsed_req['account']
 
+    def key_uri(self, aead):
+        """
+        :param aead: Generated OATH AEAD.
+        :type aead: OATHAEAD
+
+        Create a provisioning URL for use with e.g. Google Authenticator.
+
+        :rtype: str
+        """
+        return "otpauth://{oath_type}/{issuer}:{account}?secret={secret}&issuer={issuer}".format(
+            oath_type = self.type,
+            issuer = self.issuer,
+            account = self.account,
+            secret = base64.b32encode(aead.plaintext.decode('hex')),
+        )
+
 
 class U2FTokenRequest(object):
 
@@ -147,7 +179,7 @@ class U2FTokenRequest(object):
         self._parsed_req = parsed_req
         for req_field in ['appId', 'challenge', 'clientData', 'registrationData', 'version']:
             if req_field not in self._parsed_req:
-                raise EduIDAPIError("No {!r} in token".format(req_field))
+                raise EduIDAPIError("No {!r} in 'U2F' part of request".format(req_field))
 
     @property
     def appId(self):
@@ -274,9 +306,19 @@ class AddTokenAction(object):
         res = {'status': 'ERROR'}
         if self._status:
             res['status'] = 'OK'
-        if isinstance(self._request, OATHTokenRequest):
+        self._logger.debug("Creating {!r} response for {!r}".format(self._status, self._request))
+        if isinstance(self._request.token, OATHTokenRequest):
             if self._status:
-                res['hmac_key'] = self.aead.plaintext
+                key_uri = self._request.token.key_uri(self.aead)
+                #qr_factory = qrcode.image.svg.SvgPathImage
+                #buf = StringIO.StringIO()
+                #qrcode.make(key_uri, image_factory = qr_factory).save(buf)
+                buf = StringIO.StringIO()
+                qrcode.make(key_uri).save(buf)
+                res['OATH'] = {'hmac_key': self.aead.plaintext,
+                               'key_uri': key_uri,
+                               'qr_png': buf.getvalue().encode('base64'),
+                               }
         res['nonce'] = self._request.nonce
         return res
 
