@@ -61,6 +61,7 @@ class APIAuthUser():
             "revision" : 1,
             "authuser" : {
                     "status" : "enabled",
+                    "owner" : "example.edu",
                     "factors" : [
                             {
                                     "created_ts" : ISODate("2015-02-02T14:51:15.005Z"),
@@ -79,6 +80,7 @@ class APIAuthUser():
         self._metadata = metadata
         # validate known data
         self.status = data['status']
+        self.owner = data.get('owner')
         self.factors = EduIDAuthFactorList(data['factors'])
 
         if check_enabled and self.status != 'enabled':
@@ -101,6 +103,22 @@ class APIAuthUser():
         if value not in _VALID_STATUS_VALUES:
             raise ValueError("Invalid 'status' value: {!r}".format(value))
         self._data['status'] = str(value)
+
+    @property
+    def owner(self):
+        """
+        :return: Owner of authuser.
+        :rtype: str
+        """
+        return self._data['owner']
+
+    @owner.setter
+    def owner(self, value):
+        """
+        :param value: Owner's name from APIKey.owner
+        :type value: str | unicode
+        """
+        self._data['owner'] = str(value)
 
     @property
     def metadata(self):

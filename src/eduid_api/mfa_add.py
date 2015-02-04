@@ -337,6 +337,7 @@ class AddTokenAction(object):
             }]
         user_dict = {
             'status': 'enabled',
+            'owner': self._request.signing_key.owner,
             'factors': factors,
         }
         self._logger.debug("Adding user to authstore: {!r}".format(user_dict))

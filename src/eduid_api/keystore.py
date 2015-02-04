@@ -133,6 +133,22 @@ class APIKey(object):
         return self._name
 
     @property
+    def owner(self):
+        """
+        Get the name of the owner of this API key.
+
+        The owners name is associated with e.g. any authusers created using this key.
+        The reason for having a separate owner name and key name is to allow an organization
+        to have more than one API key (key rollover, multiple API clients etc.).
+
+        If no 'owner' is given in the key metadata, the keys name is used as default value.
+
+        :return: Owners name
+        :rtype: [basestring]
+        """
+        return self._data.get('owner', self._name)
+
+    @property
     def ip_addresses(self):
         """
         Get the list of IP addresses registered with this API key.
