@@ -172,3 +172,13 @@ class APIKey(object):
                 with open(self._key['file']) as fd:
                     self._key['k'] = fd.read()
         return self._key
+
+    @property
+    def allowed_commands(self):
+        """
+        Get the allowed commands for this client.
+
+        :return: List of allowed command names
+        :rtype: [str | unicode]
+        """
+        return self._data.get('allowed_commands', [])

@@ -48,13 +48,13 @@ class BaseRequest():
 
     :param request: Request to parse (can be dict for testing)
     :param remote_ip: IP address of client
-    :param name: The name of the function invoked
+    :param name: The name of the method invoked
     :param logger: logging object
     :param config: config object
 
     :type request: str or dict
-    :type remote_ip: basestring
-    :type name: basestring
+    :type remote_ip: str | unicode
+    :type name: str | unicode
     :type logger: eduid_api.log.EduIDAPILogger
     :type config: eduid_api.config.EduIDAPIConfig
     """
@@ -89,6 +89,9 @@ class BaseRequest():
         for req_field in ['version']:
             if req_field not in parsed:
                 raise EduIDAPIError("No {!r} in request".format(req_field))
+
+        if not name in self.signing_key.allowed_commands:
+            raise EduIDAPIError("Method {!r} not allowed with this key".format(name))
 
         self._parsed_req = parsed
 
