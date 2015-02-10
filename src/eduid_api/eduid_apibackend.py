@@ -97,8 +97,8 @@ class APIBackend(object):
         :param config: config object
         :param expose_real_errors: mask errors or expose them (for devel/debug/test)
         :type logger: eduid_api.log.EduIDAPILogger
-        :type db: eduid_api.db.EduIDAPIDB
-        :type authstore: eduid_api.authstore.APIAuthStore
+        :type db: eduid_api.db.EduIDAPIDB | None
+        :type authstore: eduid_api.authstore.APIAuthStore | None
         :type config: eduid_api.config.EduIDAPIConfig
         :type expose_real_errors: bool
 
@@ -160,6 +160,51 @@ class APIBackend(object):
         res = eduid_api.response.BaseResponse(response, self.logger, self.config)
         return res.to_string(remote_ip = self.remote_ip)
 
+    @cherrypy.expose
+    def aead_gen(self, request=None):
+        """
+        Create a new AEAD, probably for a new OATH token.
+
+        Example request POSTed to /aead_gen:
+
+            {
+                "version":    1,
+                "nonce":      "74b4a9a07084799548e5",
+                "token_type": "OATH",
+
+                "OATH": {
+                    "type":    "oath-totp",
+                    "account": "user@example.org",
+                    "digits":  6,
+                    "issuer":  "TestIssuer"
+                }
+            }
+
+        The 'nonce' has nothing to do with the token - it allows the API client to
+        ensure that a response is in fact related to a specific request.
+
+        :param request: JSON formatted request
+        :type request: str
+        """
+        self.remote_ip = cherrypy.request.remote.ip
+        self.logger.debug("Parsing aead_gen request from {!r}".format(self.remote_ip))
+        log_context = {'client': self.remote_ip,
+                       'req': 'aead_gen',
+                       }
+        self.logger.set_context(log_context)
+
+        # Parse request and handle any errors
+        fun = lambda: eduid_api.aead_gen.AEADGenRequest(request, self.remote_ip, self.logger, self.config)
+        success, req = self._parse_request(fun)
+        if not success:
+            return req
+        self.logger.debug("Parsed and authenticated aead_gen request:\n{!r}".format(req))
+
+        action = eduid_api.aead_gen.AEADGenAction(req, self.logger, self.config)
+
+        res = eduid_api.response.BaseResponse(action.response(), self.logger, self.config)
+        return res.to_string(remote_ip = self.remote_ip)
+
     def _parse_request(self, fun):
         """
         Generic request parser wrapper to handle errors during parsing in a uniform way.
@@ -189,7 +234,7 @@ class APIBackend(object):
         """
         self.logger.debug("handle_error() invoked")
         cherrypy.response.status = 500
-        res = eduid_api.response.ErrorResponse('Server Error #1', self.logger, self.config)
+        res = eduid_api.response.ErrorResponse('Server Error', self.logger, self.config)
         cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
 
     def error_page_default(self, status, message, traceback, version):
@@ -212,7 +257,7 @@ class APIBackend(object):
         """
         self.logger.debug("error_page_default() invoked, status={!r}, message={!r}".format(status, message))
         cherrypy.response.status = 500
-        res = eduid_api.response.ErrorResponse('Server Error #2', self.logger, self.config)
+        res = eduid_api.response.ErrorResponse('Server Error 2', self.logger, self.config)
         cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
 
 
@@ -228,8 +273,14 @@ def main(myname = 'eduid_api'):
     # initialize various components
     config = eduid_api.config.EduIDAPIConfig(args.config_file, args.debug)
     logger = eduid_api.log.EduIDAPILogger(myname, debug = config.debug)
-    db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
-    authstore = eduid_api.authstore.APIAuthStoreMongoDB(config.mongodb_uri, logger)
+    if config.mongodb_uri:
+        db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
+        authstore = eduid_api.authstore.APIAuthStoreMongoDB(config.mongodb_uri, logger)
+    else:
+        # Some functions, such as aead_gen, does not require mongodb.
+        logger.info("No mongodb_uri configured")
+        db = None
+        authstore = None
 
     cherry_conf = {'server.socket_host': config.listen_addr,
                    'server.socket_port': config.listen_port,

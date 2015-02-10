@@ -59,3 +59,4 @@ import eduid_api.mfa_add
 import eduid_api.keystore
 import eduid_api.authstore
 import eduid_api.authuser
+import eduid_api.aead_gen

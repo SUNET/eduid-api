@@ -47,7 +47,7 @@ def sign_and_encrypt(claims, priv_jwk, alg = 'RS256'):
 def decrypt_and_verify(plaintext, decr_key, signing_key):
     jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
     decrypted = jose.decrypt(jwe, decr_key)
-    sys.stderr.write("Decrypted {!r}".format(decrypted))
+    sys.stderr.write("Decrypted {!r}\n\n".format(decrypted))
     if not 'v1' in decrypted.claims:
         sys.stderr.write("No 'v1' in decrypted claims: {!r}\n\n".format(decrypted))
         return False
@@ -55,7 +55,7 @@ def decrypt_and_verify(plaintext, decr_key, signing_key):
     sys.stderr.write("Decrypted claims to verify: {!r}\n\n".format(to_verify))
 
     jwt = jose.verify(to_verify, signing_key)
-    sys.stderr.write("Good signature on request using key {!r}: {!r}\n\n".format(
+    sys.stderr.write("Good signature on request using key:\n{!r}\n\n{!r}\n\n".format(
         signing_key, jwt
     ))
     return jwt
@@ -77,11 +77,10 @@ def main():
     sys.stderr.write(r.text)
     sys.stderr.write("---\n\n")
 
-    plaintext = decrypt_and_verify(r.text, priv_jwk, jwk)
+    jwt = decrypt_and_verify(r.text, priv_jwk, jwk)
 
-    sys.stderr.write("Decrypted and verified response:\n{!r}\n\n".format(plaintext))
-
-    sys.stderr.write(json.dumps(plaintext.claims, sort_keys=True, indent=4) + '\n')
+    sys.stderr.write("Extracted and pretty-printed claims from JWT:\n\n")
+    sys.stderr.write(json.dumps(jwt.claims, sort_keys=True, indent=4) + '\n')
 
 
 if __name__ == '__main__':

@@ -87,7 +87,19 @@ class KeyStore(object):
 
         :rtype: [APIKey()]
         """
-        res = [this for this in self._keys if ip in this.ip_addresses]
+        res = [this for this in self._keys if ip in this.ip_addresses or '*' in this.ip_addresses]
+        return res
+
+    def lookup_by_url(self, url):
+        """
+        Return all APIKeys matching the URL supplied. For outgoing requests.
+
+        :param url: URL (of server presumably)
+        :type url: str | unicode
+
+        :rtype: [APIKey()]
+        """
+        res = [this for this in self._keys if url in this.urls]
         return res
 
     @property
@@ -153,10 +165,24 @@ class APIKey(object):
         """
         Get the list of IP addresses registered with this API key.
 
+        IP addresses are given for clients connecting to this API service.
+
         :return: List of IP addresses
         :rtype: [basestring]
         """
-        return self._data['ip_addresses']
+        return self._data.get('ip_addresses', [])
+
+    @property
+    def urls(self):
+        """
+        Get the list of URLs registered with this API key.
+
+        URLs are provided for keys used when this API service needs to connect to other services.
+
+        :return: List of URLs
+        :rtype: [basestring]
+        """
+        return self._data.get('urls', [])
 
     @property
     def keytype(self):

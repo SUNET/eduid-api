@@ -37,6 +37,9 @@ eduID API request checking and parsing
 """
 
 import jose
+import requests
+import cherrypy
+
 from eduid_api.common import EduIDAPIError
 
 _TESTING = False
@@ -74,7 +77,8 @@ class BaseRequest():
                 decrypted = self._decrypt(request)
                 verified = self._verify(decrypted, remote_ip)
                 if not verified:
-                    return
+                    self._logger.warning("Could not verify decrypted request from {!r}".format(remote_ip))
+                    raise EduIDAPIError("Failed verifying signature")
                 parsed = verified.claims
             except Exception:
                 logger.error("Failed decrypting/verifying request:\n{!r}\n-----\n".format(request), traceback=True)
@@ -82,18 +86,19 @@ class BaseRequest():
 
         assert(isinstance(parsed, dict))
 
-        if parsed.get('version', 1) is not 1:
-            # really handle missing version below
-            raise EduIDAPIError("Unknown request version: {!r}".format(parsed['version']))
-
         for req_field in ['version']:
             if req_field not in parsed:
                 raise EduIDAPIError("No {!r} in request".format(req_field))
+
+        if parsed['version'] is not 1:
+            # really handle missing version below
+            raise EduIDAPIError("Unknown request version: {!r}".format(parsed['version']))
 
         if not name in self.signing_key.allowed_commands:
             raise EduIDAPIError("Method {!r} not allowed with this key".format(name))
 
         self._parsed_req = parsed
+        cherrypy.request.eduid_api_parsed_req = parsed
 
     def __repr__(self):
         return ('<{} @{:#x}>'.format(
@@ -150,7 +155,7 @@ class BaseRequest():
         keys = self._config.keys.lookup_by_ip(remote_ip)
 
         if not len(keys):
-            self._logger.info("No API keys found for IP address {!r}".format(remote_ip))
+            self._logger.info("No API keys found for IP address {!r}, can't verify signature".format(remote_ip))
             return False
 
         # Now, check for a valid signature
@@ -184,3 +189,104 @@ class BaseRequest():
         :rtype: eduid_api.keystore.APIKey | None
         """
         return self._signing_key
+
+    @property
+    def nonce(self):
+        """
+        Nonce supplied by client in request.
+
+        :rtype: str
+        """
+        return self._parsed_req['nonce']
+
+
+class MakeRequest(object):
+    """
+    Create a request for sending somewhere.
+
+    :param claims: data to sign, encrypt and send
+    :param logger: logging object
+    :param config: config object
+
+    :type claims: dict
+    :type logger: eduid_api.log.EduIDAPILogger
+    :type config: eduid_api.config.EduIDAPIConfig
+
+    :type _api_key: eduid_api.keystore.APIKey | None
+    :type _claims: dict
+    :type signed_claims: dict
+    """
+    def __init__(self, claims, logger, config, alg = 'RS256'):
+        self._logger = logger
+        self._config = config
+        self._request_result = None
+        self._api_key = None
+        self._claims = claims
+        jws = jose.sign(claims, self._config.keys.private_key.jwk, alg=alg)
+        self.signed_claims = {'v1': jose.serialize_compact(jws)}
+
+    def send_request(self, url, name, apikey):
+        """
+        Encrypt the claims and POST it to url.
+
+        :param url: The URL to POST the data to
+        :param name: The HTTP parameter name to put the data in
+        :param apikey: API Key to encrypt data with before posting
+        :return:
+
+        :type url: str | unicode
+        :type apikey: eduid_api.keystore.APIKey
+        """
+        self._logger.debug("Encrypting signed request using {!r}".format(apikey))
+        if not apikey.keytype == 'jose':
+            raise EduIDAPIError("Non-jose API key unusuable with send_request")
+        self._api_key = apikey
+        jwe = jose.encrypt(self.signed_claims, apikey.jwk)
+        data = {name: jose.serialize_compact(jwe)}
+        self._logger.debug("Sending signed and encrypted request to {!r}".format(url))
+        self._request_result = requests.post(url, data = data)
+        self._logger.debug("Result of request: {!r}".format(self._request_result))
+        return self._request_result
+
+    def decrypt_response(self, ciphertext=None, return_jwt=False):
+        """
+        Decrypt the response returned from send_request.
+
+        :param ciphertext: Ciphertext to decrypt. If not supplied the last request response is used.
+        :param return_jwt: Return the whole JOSE JWT or just the claims
+
+        :type ciphertext: None | str | unicode
+        :type return_jwt: bool
+        :return: Decrypted result
+        :rtype: dict | jose.JWT
+        """
+        if ciphertext is None:
+            ciphertext = self._request_result.text
+        jwe = jose.deserialize_compact(ciphertext.replace("\n", ''))
+        priv_key = self._config.keys.private_key
+        if not priv_key.keytype == 'jose':
+            raise EduIDAPIError("Non-jose private key unusuable with decrypt_response")
+        decrypted = jose.decrypt(jwe, priv_key.jwk)
+        if not 'v1' in decrypted.claims:
+            self._logger.error("No 'v1' in decrypted claims: {!r}\n\n".format(decrypted))
+            raise EduIDAPIError("No 'v1' in decrypted claims")
+
+        to_verify = jose.deserialize_compact(decrypted.claims['v1'])
+        jwt = jose.verify(to_verify, self._api_key.jwk)
+        self._logger.debug("Good signature on response to request using key: {!r}".format(
+            self._api_key.jwk
+        ))
+        if 'nonce' in self._claims:
+            # there was a nonce in the request, verify it is also present in the response
+            if not 'nonce' in jwt.claims:
+                self._logger.warning("Nonce was present in request, but not in response:\n{!r}".format(
+                    jwt.claims
+                ))
+                raise EduIDAPIError("Request-Response nonce validation error")
+            if jwt.claims['nonce'] != self._claims['nonce']:
+                self._logger.warning("Response nonce {!r} does not match expected {!r}".format(
+                    jwt.claims['nonce'], self._claims['nonce']
+                ))
+        if return_jwt:
+            return jwt
+        return jwt.claims

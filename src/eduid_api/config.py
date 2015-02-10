@@ -43,7 +43,7 @@ from eduid_api.common import EduIDAPIError
 
 _CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig.__init__()
                     'logdir': None,
-                    'mongodb_uri': '127.0.0.1',
+                    'mongodb_uri': '',
                     'add_raw_allow': '',       # comma-separated list of IP addresses
                     'listen_addr': '0.0.0.0',
                     'listen_port': '8511',
@@ -55,6 +55,9 @@ _CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig._
                     'keystore_fn': '',
                     'jose_alg': 'RS256',       # JOSE signing algorithm
                     'vccs_base_url': 'http://localhost:8550/',
+                    'oath_aead_keyhandle': None,
+                    'oath_yhsm_device': '',
+                    'oath_aead_gen_url': '',   # URL to another instance of eduid-api with a YubiHSM
                     }
 
 _CONFIG_SECTION = 'eduid_api'
@@ -70,6 +73,9 @@ class EduIDAPIConfig():
     :param debug: Debug setting, from command line parsing.
     :type filename: basestring
     :type debug: bool
+
+    :type yhsm: pyhsm.YHSM
+    :type keys: eduid_api.keystore.KeyStore
     """
 
     def __init__(self, filename, debug):
@@ -83,6 +89,23 @@ class EduIDAPIConfig():
         self._parsed_add_raw_allow = \
             [x.strip() for x in tmp_add_raw_allow.split(',')]
         self.keys = eduid_api.keystore.KeyStore(self.keystore_fn)
+
+        self._parsed_oath_aead_keyhandle = None
+        kh_str = self.config.get(self.section, 'oath_aead_keyhandle')
+        if self.oath_yhsm_device or kh_str:
+            try:
+                import pyhsm
+                if kh_str:
+                    self._parsed_oath_aead_keyhandle = pyhsm.util.key_handle_to_int(kh_str.strip())
+                try:
+                    self.yhsm = pyhsm.YHSM(device = self.oath_yhsm_device)
+                    # stir up the pool
+                    for _ in xrange(10):
+                        self.yhsm.random(32)
+                except pyhsm.exception.YHSM_Error:
+                    raise EduIDAPIError('YubiHSM init error')
+            except ImportError:
+                raise EduIDAPIError("yhsm settings present, but import of pyhsm failed")
 
     @property
     def logdir(self):
@@ -219,10 +242,29 @@ class EduIDAPIConfig():
         return self.config.get(self.section, 'vccs_base_url')
 
     @property
-    def oathmgr_base_url(self):
+    def oath_aead_gen_url(self):
         """
-        OATH manager service base URL.
+        OATH AEAD generator service base URL.
 
-        :rtype: basestring
+        :rtype: str | unicode
         """
-        return self.config.get(self.section, 'oathmgr_base_url')
+        return self.config.get(self.section, 'oath_aead_gen_url')
+
+    @property
+    def oath_aead_keyhandle(self):
+        """
+        The keyhandle to use when creating OATH AEADs with a YubiHSM (integer).
+
+        :rtype: int | None
+        """
+        return self._parsed_oath_aead_keyhandle
+
+    @property
+    def oath_yhsm_device(self):
+        """
+        OATH YubiHSM device name (default: /dev/ttyACM0).
+
+        :rtype: str | unicode
+        """
+        return self.config.get(self.section, 'oath_yhsm_device')
+

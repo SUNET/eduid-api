@@ -33,6 +33,7 @@
 #
 
 import jose
+import cherrypy
 
 from eduid_api.common import EduIDAPIError
 
@@ -73,7 +74,13 @@ class BaseResponse(object):
         encrypt_key = remote_key
         if not encrypt_key:
             # default to the first key found using the remote_ip in case no key was supplied
-            encrypt_key = self._config.keys.lookup_by_ip(remote_ip)[0]
+            ip_keys = self._config.keys.lookup_by_ip(remote_ip)
+            if not ip_keys:
+                self._logger.warning("Found no key for IP {!r}, can't encrypt response:\n{!r}".format(
+                    remote_ip, self._data
+                ))
+                raise EduIDAPIError("No API Key found - can't encrypt response")
+            encrypt_key = ip_keys[0]
         self._logger.debug("Encrypting claims to key {!r}".format(encrypt_key))
         jwe = jose.encrypt(signed_claims, encrypt_key.jwk)
         return jose.serialize_compact(jwe)
@@ -89,4 +96,9 @@ class ErrorResponse(BaseResponse):
                  'status': 'FAIL',
                  'reason': message,
                  }
+        try:
+            if 'nonce' in cherrypy.request.eduid_api_parsed_req:
+                error['nonce'] = cherrypy.request.eduid_api_parsed_req['nonce']
+        except AttributeError:
+            pass
         BaseResponse.__init__(self, error, logger, config)
