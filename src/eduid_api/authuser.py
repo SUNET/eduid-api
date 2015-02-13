@@ -50,7 +50,7 @@ class APIAuthUserError(APIAuthenticationError):
     pass
 
 
-class APIAuthUser():
+class APIAuthUser(object):
     """
     Represents the data kept in the eduid-API private authstore.
 
