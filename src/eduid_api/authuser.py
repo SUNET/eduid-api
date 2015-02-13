@@ -75,9 +75,10 @@ class APIAuthUser(object):
 
     The 'revision' is to provide atomic updates of the actual content which is below 'authuser'.
     """
-    def __init__(self, data, metadata, check_enabled):
+    def __init__(self, userid, data, metadata, check_enabled):
         self._data = data
         self._metadata = metadata
+        self.userid = userid
         # validate known data
         self.status = data['status']
         self.owner = data.get('owner')
@@ -85,6 +86,25 @@ class APIAuthUser(object):
 
         if check_enabled and self.status != 'enabled':
             raise APIAuthUserError("Disabled authuser requested")
+
+    @property
+    def userid(self):
+        """
+        :return: Unique id of authuser.
+        :rtype: str | None
+        """
+        return self._data['userid']
+
+    @userid.setter
+    def userid(self, value):
+        """
+        :param value: Either a bson.objectId or a string.
+        :type value: str | unicode | bson.objectId | None
+        """
+        if value is None:
+            self._data['userid'] = None
+        else:
+            self._data['userid'] = str(value)
 
     @property
     def status(self):
@@ -136,18 +156,20 @@ class APIAuthUser(object):
         return self._data
 
 
-def from_dict(data, metadata = None, check_enabled=True):
+def from_dict(data, metadata = None, check_enabled=True, userid = None):
     """
     Create a suitable APIAuthUser object based on the 'type' of 'data'.
 
     :param data: dict with authuser data - probably from a database
     :param metadata: opaque data about this authuser (default: {})
     :param check_enabled: boolean controlling check of authuser status after creation
+    :param userid: Unique userdb, if one has been assigned.
 
     :type data: dict
     :type check_enabled: bool
+    :type userid: None | bson.ObjectId
     :rtype: APIAuthUser
     """
     if not metadata:
         metadata = {}
-    return APIAuthUser(data, metadata, check_enabled)
+    return APIAuthUser(userid, data, metadata, check_enabled)

@@ -323,9 +323,9 @@ class AddTokenAction(object):
             'factors': factors,
         }
         self._logger.debug("Adding user to authstore: {!r}".format(user_dict))
-        user = eduid_api.authuser.from_dict(user_dict)
-        self._logger.debug("AuthUser: {!r}".format(user))
-        self._authstore.add_authuser(user)
+        self._user = eduid_api.authuser.from_dict(user_dict)
+        self._logger.debug("AuthUser: {!r}".format(self._user))
+        self._authstore.add_authuser(self._user)
 
     def response(self):
         """
@@ -347,7 +347,10 @@ class AddTokenAction(object):
                 key_uri = self._request.token.key_uri(self.aead)
                 buf = StringIO.StringIO()
                 qrcode.make(key_uri).save(buf)
-                res['OATH'] = {'hmac_key': self.aead.secret,
+                self._logger.info("Created authuser with id {!r}, credential id {!r}".format(self._user.userid,
+                                                                                             self._token_id))
+                res['OATH'] = {'userid': self._user.userid,
+                               'hmac_key': self.aead.secret,
                                'key_uri': key_uri,
                                'qr_png': buf.getvalue().encode('base64'),
                                }

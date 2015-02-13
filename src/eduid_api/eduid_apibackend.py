@@ -135,6 +135,19 @@ class APIBackend(object):
                 }
             }
 
+        Example response:
+
+            {
+                "OATH": {
+                    "userid": "54de24ca8a5da50011e23b41"
+                    "hmac_key": "1cca0f7656ef50f182bc90fd8c0bb43140924a78",
+                    "key_uri": "otpauth://totp/TestIssuer:user@example.org?secret=DTFA6...GFAJESTY&issuer=TestIssuer",
+                    "qr_png": "iVBO...ORK5CYII=\n",
+                },
+                "nonce": "74b4a9a07084799548e5",
+                "status": "OK"
+            }
+
         The 'nonce' has nothing to do with the token - it allows the API client to
         ensure that a response is in fact related to a specific request.
 
@@ -162,6 +175,47 @@ class APIBackend(object):
 
     @cherrypy.expose
     def aead_gen(self, request=None):
+        """
+        Create a new AEAD, probably for a new OATH token.
+
+        Example request POSTed to /aead_gen:
+
+            {
+                "version":    1,
+                "nonce":      "74b4a9a07084799548e5",
+                "plaintext":  True,
+                "length":     20
+            }
+
+        If 'plaintext' is True, the actual plaintext of the AEAD is returned (key named
+        'secret' to avoid inclusion in Sentry reports). This is necessary when creating
+        OATH AEADs since the actual secret has to be provisioned into the user's token,
+        but is optional in this API in case some future use case does not require it.
+
+        :param request: JSON formatted request
+        :type request: str
+        """
+        self.remote_ip = cherrypy.request.remote.ip
+        self.logger.debug("Parsing aead_gen request from {!r}".format(self.remote_ip))
+        log_context = {'client': self.remote_ip,
+                       'req': 'aead_gen',
+                       }
+        self.logger.set_context(log_context)
+
+        # Parse request and handle any errors
+        fun = lambda: eduid_api.aead_gen.AEADGenRequest(request, self.remote_ip, self.logger, self.config)
+        success, req = self._parse_request(fun)
+        if not success:
+            return req
+        self.logger.debug("Parsed and authenticated aead_gen request:\n{!r}".format(req))
+
+        action = eduid_api.aead_gen.AEADGenAction(req, self.logger, self.config)
+
+        res = eduid_api.response.BaseResponse(action.response(), self.logger, self.config)
+        return res.to_string(remote_ip = self.remote_ip)
+
+    @cherrypy.expose
+    def mfa_auth(self, request=None):
         """
         Create a new AEAD, probably for a new OATH token.
 
