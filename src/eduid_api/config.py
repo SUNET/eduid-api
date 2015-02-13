@@ -74,7 +74,7 @@ class EduIDAPIConfig():
     :type filename: basestring
     :type debug: bool
 
-    :type yhsm: pyhsm.YHSM
+    :type yhsm: pyhsm.YHSM | None
     :type keys: eduid_api.keystore.KeyStore
     """
 
@@ -91,6 +91,7 @@ class EduIDAPIConfig():
         self.keys = eduid_api.keystore.KeyStore(self.keystore_fn)
 
         self._parsed_oath_aead_keyhandle = None
+        self.yhsm = None
         kh_str = self.config.get(self.section, 'oath_aead_keyhandle')
         if self.oath_yhsm_device or kh_str:
             try:

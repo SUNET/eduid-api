@@ -170,18 +170,14 @@ class APIBackend(object):
             {
                 "version":    1,
                 "nonce":      "74b4a9a07084799548e5",
-                "token_type": "OATH",
-
-                "OATH": {
-                    "type":    "oath-totp",
-                    "account": "user@example.org",
-                    "digits":  6,
-                    "issuer":  "TestIssuer"
-                }
+                "plaintext":  True,
+                "length":     20
             }
 
-        The 'nonce' has nothing to do with the token - it allows the API client to
-        ensure that a response is in fact related to a specific request.
+        If 'plaintext' is True, the actual plaintext of the AEAD is returned (key named
+        'secret' to avoid inclusion in Sentry reports). This is necessary when creating
+        OATH AEADs since the actual secret has to be provisioned into the user's token,
+        but is optional in this API in case some future use case does not require it.
 
         :param request: JSON formatted request
         :type request: str
@@ -281,6 +277,9 @@ def main(myname = 'eduid_api'):
         logger.info("No mongodb_uri configured")
         db = None
         authstore = None
+
+    if config.yhsm:
+        logger.info("YubiHSM: {!r}".format(config.yhsm.version.sysinfo))
 
     cherry_conf = {'server.socket_host': config.listen_addr,
                    'server.socket_port': config.listen_port,
