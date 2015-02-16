@@ -35,7 +35,11 @@
 import bson
 import datetime
 
-_VALID_FACTOR_TYPES = ['oath-hotp', 'oath-totp']
+_VALID_FACTOR_TYPES = ['oath-hotp',
+                       'oath-totp',
+                       #'password',
+                       #'U2F',
+                       ]
 
 
 class EduIDAuthFactor(object):
@@ -175,6 +179,9 @@ class EduIDAuthFactorPassword(EduIDAuthFactor):
     :type data: dict
     """
     def __init__(self, data):
+        # Disabled because untested
+        raise NotImplemented('Password factors not implemented')
+
         EduIDAuthFactor.__init__(self, data)
 
         if self.type != 'password':
@@ -245,7 +252,7 @@ class EduIDAuthFactorList(object):
         """
         Return the list of factors as an iterable.
         :return: List of factors
-        :rtype: list
+        :rtype: [EduIDAuthFactor]
         """
         return self.factors
 

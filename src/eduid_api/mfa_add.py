@@ -75,7 +75,7 @@ class MFAAddRequest(BaseRequest):
     :type logger: eduid_api.log.EduIDAPILogger
     :type config: eduid_api.config.EduIDAPIConfig
 
-    :type token: OATHTokenRequest | U2FTokenRequest
+    :type token: AddOATHTokenRequest | AddU2FTokenRequest
     """
     def __init__(self, request, remote_ip, logger, config):
         BaseRequest.__init__(self, request, remote_ip, 'mfa_add', logger, config)
@@ -90,9 +90,9 @@ class MFAAddRequest(BaseRequest):
         if self.token_type == 'OATH':
             if 'OATH' not in self._parsed_req:
                 raise EduIDAPIError("No 'OATH' in request")
-            self.token = OATHTokenRequest(self._parsed_req['OATH'])
+            self.token = AddOATHTokenRequest(self._parsed_req['OATH'])
         elif self.token_type == 'U2F':
-            self.token = U2FTokenRequest(self._parsed_req['U2F'])
+            self.token = AddU2FTokenRequest(self._parsed_req['U2F'])
         else:
             raise EduIDAPIError("Unknown token type")
 
@@ -106,7 +106,7 @@ class MFAAddRequest(BaseRequest):
         return self._parsed_req['token_type']
 
 
-class OATHTokenRequest(object):
+class AddOATHTokenRequest(object):
     """
     Parse the 'OATH' part of an MFA add request.
 
@@ -189,7 +189,7 @@ class OATHTokenRequest(object):
         )
 
 
-class U2FTokenRequest(object):
+class AddU2FTokenRequest(object):
 
     """
     Parse the 'OATH' part of an MFA add request.
@@ -265,7 +265,7 @@ class AddTokenAction(object):
     :type config: eduid_api.config.EduIDAPIConfig
 
     :type aead: OATHAEAD
-    :type authuser: eduid_api.authuser.APIAuthUser
+    :type _user: eduid_api.authuser.APIAuthUser
     :type _token_id: bson.ObjectId
     :type _authstore: eduid_api.authstore.APIAuthStore
     """
@@ -275,10 +275,10 @@ class AddTokenAction(object):
         self._logger = logger
         self._config = config
         self.aead = None
-        self.authuser = None
         self._token_id = bson.ObjectId()  # unique id for new token
         self._status = None
         self._factor = None
+        self._user = None
 
     def add_to_authbackend(self):
         """
@@ -290,8 +290,9 @@ class AddTokenAction(object):
             # dump all attributes on self to logger
             #for attr in dir(self):
             #    self._logger.debug("ATTR {!r}: {!r}".format(attr, getattr(self, attr)))
+            token_type = 'oath-{!s}'.format(self._request.token.type)
             self._factor = vccs_client.VCCSOathFactor(
-                'oath-totp',
+                token_type,
                 str(self._token_id),
                 nonce = self.aead.nonce,
                 aead = self.aead.aead,
@@ -342,14 +343,14 @@ class AddTokenAction(object):
         if self._status:
             res['status'] = 'OK'
         self._logger.debug("Creating {!r} response for {!r}".format(self._status, self._request))
-        if isinstance(self._request.token, OATHTokenRequest):
+        if isinstance(self._request.token, AddOATHTokenRequest):
             if self._status:
                 key_uri = self._request.token.key_uri(self.aead)
                 buf = StringIO.StringIO()
                 qrcode.make(key_uri).save(buf)
-                self._logger.info("Created authuser with id {!r}, credential id {!r}".format(self._user.userid,
+                self._logger.info("Created authuser with id {!r}, credential id {!r}".format(self._user.user_id,
                                                                                              self._token_id))
-                res['OATH'] = {'userid': self._user.userid,
+                res['OATH'] = {'user_id': self._user.user_id,
                                'hmac_key': self.aead.secret,
                                'key_uri': key_uri,
                                'qr_png': buf.getvalue().encode('base64'),
@@ -446,7 +447,7 @@ def add_token(req, authstore, logger, config):
     :param config: Configuration
 
     :type req: MFAAddRequest
-    :type authstore: eduid_api.credstore.APIAuthStore
+    :type authstore: eduid_api.authstore.APIAuthStore
     :type logger: eduid_api.log.EduIDAPILogger
     :type config: eduid_api.config.EduIDAPIConfig
     :return: Resppnse dict

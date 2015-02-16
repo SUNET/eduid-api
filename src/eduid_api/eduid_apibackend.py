@@ -139,7 +139,7 @@ class APIBackend(object):
 
             {
                 "OATH": {
-                    "userid": "54de24ca8a5da50011e23b41"
+                    "user_id": "54de24ca8a5da50011e23b41",
                     "hmac_key": "1cca0f7656ef50f182bc90fd8c0bb43140924a78",
                     "key_uri": "otpauth://totp/TestIssuer:user@example.org?secret=DTFA6...GFAJESTY&issuer=TestIssuer",
                     "qr_png": "iVBO...ORK5CYII=\n",
@@ -155,23 +155,60 @@ class APIBackend(object):
         :type request: str
         """
         self.remote_ip = cherrypy.request.remote.ip
-        self.logger.debug("Parsing mfa_add request from {!r}".format(self.remote_ip))
-        log_context = {'client': self.remote_ip,
-                       'req': 'mfa_add',
-                       }
-        self.logger.set_context(log_context)
 
         # Parse request and handle any errors
         fun = lambda: eduid_api.mfa_add.MFAAddRequest(request, self.remote_ip, self.logger, self.config)
-        success, req = self._parse_request(fun)
+        success, req = self._parse_request(fun, 'mfa_add')
         if not success:
             return req
-        self.logger.debug("Parsed and authenticated mfa_add request:\n{!r}".format(req))
 
-        response = eduid_api.mfa_add.add_token(req, self.authstore, self.logger, self.config)
+        fun = lambda: eduid_api.mfa_add.add_token(req, self.authstore, self.logger, self.config)
+        response = self._execute(fun, 'mfa_add')
 
-        res = eduid_api.response.BaseResponse(response, self.logger, self.config)
-        return res.to_string(remote_ip = self.remote_ip)
+        return response.to_string(remote_ip = self.remote_ip)
+
+    @cherrypy.expose
+    def mfa_auth(self, request=None):
+        """
+        Authenticate with MFA (Multi Factor Authentication).
+
+        Example request POSTed to /mfa_auth:
+
+            {
+                "version":    1,
+                "nonce":      "18e4909c157f670169c7",
+                "OATH": {
+                    "user_id": "54e20dec8a5da5000d35083e",
+                    "user_code": "123456"
+                }
+            }
+
+        Example response:
+
+           {
+                "OATH": {
+                    "authenticated": true
+                },
+                "nonce": "18e4909c157f670169c7",
+                "status": "OK"
+            }
+
+
+        :param request: JSON formatted request
+        :type request: str
+        """
+        self.remote_ip = cherrypy.request.remote.ip
+
+        # Parse request and handle any errors
+        fun = lambda: eduid_api.mfa_auth.MFAAuthRequest(request, self.remote_ip, self.logger, self.config)
+        success, req = self._parse_request(fun, 'mfa_auth')
+        if not success:
+            return req
+
+        fun = lambda: eduid_api.mfa_auth.authenticate(req, self.authstore, self.logger, self.config)
+        response = self._execute(fun, 'mfa_auth')
+
+        return response.to_string(remote_ip = self.remote_ip)
 
     @cherrypy.expose
     def aead_gen(self, request=None):
@@ -196,66 +233,19 @@ class APIBackend(object):
         :type request: str
         """
         self.remote_ip = cherrypy.request.remote.ip
-        self.logger.debug("Parsing aead_gen request from {!r}".format(self.remote_ip))
-        log_context = {'client': self.remote_ip,
-                       'req': 'aead_gen',
-                       }
-        self.logger.set_context(log_context)
 
         # Parse request and handle any errors
         fun = lambda: eduid_api.aead_gen.AEADGenRequest(request, self.remote_ip, self.logger, self.config)
-        success, req = self._parse_request(fun)
+        success, req = self._parse_request(fun, 'aead_gen')
         if not success:
             return req
-        self.logger.debug("Parsed and authenticated aead_gen request:\n{!r}".format(req))
 
-        action = eduid_api.aead_gen.AEADGenAction(req, self.logger, self.config)
+        fun = lambda: eduid_api.aead_gen.AEADGenAction(req, self.logger, self.config).response()
+        response = self._execute(fun, 'aead_gen')
 
-        res = eduid_api.response.BaseResponse(action.response(), self.logger, self.config)
-        return res.to_string(remote_ip = self.remote_ip)
+        return response.to_string(remote_ip = self.remote_ip)
 
-    @cherrypy.expose
-    def mfa_auth(self, request=None):
-        """
-        Create a new AEAD, probably for a new OATH token.
-
-        Example request POSTed to /aead_gen:
-
-            {
-                "version":    1,
-                "nonce":      "74b4a9a07084799548e5",
-                "plaintext":  True,
-                "length":     20
-            }
-
-        If 'plaintext' is True, the actual plaintext of the AEAD is returned (key named
-        'secret' to avoid inclusion in Sentry reports). This is necessary when creating
-        OATH AEADs since the actual secret has to be provisioned into the user's token,
-        but is optional in this API in case some future use case does not require it.
-
-        :param request: JSON formatted request
-        :type request: str
-        """
-        self.remote_ip = cherrypy.request.remote.ip
-        self.logger.debug("Parsing aead_gen request from {!r}".format(self.remote_ip))
-        log_context = {'client': self.remote_ip,
-                       'req': 'aead_gen',
-                       }
-        self.logger.set_context(log_context)
-
-        # Parse request and handle any errors
-        fun = lambda: eduid_api.aead_gen.AEADGenRequest(request, self.remote_ip, self.logger, self.config)
-        success, req = self._parse_request(fun)
-        if not success:
-            return req
-        self.logger.debug("Parsed and authenticated aead_gen request:\n{!r}".format(req))
-
-        action = eduid_api.aead_gen.AEADGenAction(req, self.logger, self.config)
-
-        res = eduid_api.response.BaseResponse(action.response(), self.logger, self.config)
-        return res.to_string(remote_ip = self.remote_ip)
-
-    def _parse_request(self, fun):
+    def _parse_request(self, fun, name):
         """
         Generic request parser wrapper to handle errors during parsing in a uniform way.
 
@@ -263,6 +253,12 @@ class APIBackend(object):
         :type fun: callable
         :return: Parsed data
         """
+        self.logger.info("Parsing {!s} request from {!r}".format(name, self.remote_ip))
+        log_context = {'client': self.remote_ip,
+                       'req': name,
+                       }
+        self.logger.set_context(log_context)
+
         try:
             req = fun()
             if not req.signing_key:
@@ -270,10 +266,27 @@ class APIBackend(object):
                 cherrypy.response.status = 403
                 # Don't disclose anything about our internal issues
                 return False, None
+            self.logger.debug("Parsed and authenticated {!s} request:\n{!r}".format(name, req))
             return True, req
         except EduIDAPIError as ex:
+            self.logger.info("Parsing {!s} failed: {!s}".format(name, ex.reason))
             res = eduid_api.response.ErrorResponse(ex.reason, self.logger, self.config)
             return False, res.to_string(remote_ip = self.remote_ip)
+
+    def _execute(self, fun, name):
+        """
+        Generic request parser wrapper to handle errors during execution in a uniform way.
+
+        :param fun: Function that will execute a previously parsed request
+        :type fun: callable
+        :return: eduid_api.response.BaseResponse
+        """
+        try:
+            response = fun()
+            return eduid_api.response.BaseResponse(response, self.logger, self.config)
+        except EduIDAPIError as ex:
+            self.logger.info("Executing {!s} failed: {!s}".format(name, ex.reason))
+            return eduid_api.response.ErrorResponse(ex.reason, self.logger, self.config)
 
     def handle_error(self):
         """

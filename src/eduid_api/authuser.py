@@ -75,36 +75,32 @@ class APIAuthUser(object):
 
     The 'revision' is to provide atomic updates of the actual content which is below 'authuser'.
     """
-    def __init__(self, userid, data, metadata, check_enabled):
+    def __init__(self, data, metadata, check_enabled):
         self._data = data
         self._metadata = metadata
-        self.userid = userid
         # validate known data
         self.status = data['status']
         self.owner = data.get('owner')
-        self.factors = EduIDAuthFactorList(data['factors'])
+        self._factors = EduIDAuthFactorList(data['factors'])
 
         if check_enabled and self.status != 'enabled':
             raise APIAuthUserError("Disabled authuser requested")
 
     @property
-    def userid(self):
+    def user_id(self):
         """
         :return: Unique id of authuser.
         :rtype: str | None
         """
-        return self._data['userid']
+        return self._data.get('user_id')
 
-    @userid.setter
-    def userid(self, value):
+    @user_id.setter
+    def user_id(self, value):
         """
         :param value: Either a bson.objectId or a string.
-        :type value: str | unicode | bson.objectId | None
+        :type value: str | unicode | bson.objectId
         """
-        if value is None:
-            self._data['userid'] = None
-        else:
-            self._data['userid'] = str(value)
+        self._data['user_id'] = str(value)
 
     @property
     def status(self):
@@ -141,6 +137,14 @@ class APIAuthUser(object):
         self._data['owner'] = str(value)
 
     @property
+    def factors(self):
+        """
+        :return: Factors associated with authuser.
+        :rtype: eduid_api.authfactor.EduIDAuthFactorList
+        """
+        return self._factors
+
+    @property
     def metadata(self):
         """
         :return: Opaque data about this authuser. This data is owned by APIAuthStore.
@@ -156,20 +160,18 @@ class APIAuthUser(object):
         return self._data
 
 
-def from_dict(data, metadata = None, check_enabled=True, userid = None):
+def from_dict(data, metadata = None, check_enabled=True):
     """
     Create a suitable APIAuthUser object based on the 'type' of 'data'.
 
     :param data: dict with authuser data - probably from a database
     :param metadata: opaque data about this authuser (default: {})
     :param check_enabled: boolean controlling check of authuser status after creation
-    :param userid: Unique userdb, if one has been assigned.
 
     :type data: dict
     :type check_enabled: bool
-    :type userid: None | bson.ObjectId
     :rtype: APIAuthUser
     """
     if not metadata:
         metadata = {}
-    return APIAuthUser(userid, data, metadata, check_enabled)
+    return APIAuthUser(data, metadata, check_enabled)

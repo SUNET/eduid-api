@@ -155,7 +155,6 @@ class APIAuthStoreMongoDB(APIAuthStore):
         cred = eduid_api.authuser.from_dict(res['authuser'],
                                             metadata = metadata,
                                             check_enabled = check_revoked,
-                                            userid = res['_id'],
                                             )
         return cred
 
@@ -168,15 +167,14 @@ class APIAuthStoreMongoDB(APIAuthStore):
         """
         if not isinstance(user, APIAuthUser):
             raise TypeError("non-APIAuthUser cred")
+        if not user.user_id:
+            user.user_id = bson.ObjectId()
         docu = {'revision': 1,
                 'authuser': user.to_dict(),
                 }
         self._logger.debug("Add authuser:\n{!r}".format(docu))
         try:
             res = self.coll.insert(docu)
-            if isinstance(res, bson.ObjectId):
-                user.userid = res
-                return True
             return res
         except pymongo.errors.DuplicateKeyError:
             return False
