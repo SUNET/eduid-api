@@ -49,6 +49,7 @@ import eduid_api
 from eduid_api.eduid_apibackend import APIBackend
 from eduid_api.log import EduIDAPILogger
 
+
 class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
 
     def setUp(self):
@@ -59,11 +60,13 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         self.logger = eduid_api.log.EduIDAPILogger('test_apibackend', syslog=False)
         try:
             self.db = eduid_api.db.EduIDAPIDB(self.config.mongodb_uri)
+            self.authstore = eduid_api.authstore.APIAuthStoreMongoDB(self.config.mongodb_uri, self.logger)
         except Exception:
             # will skip tests that require mongodb
             self.db = None
+            self.authstore = None
 
-        self.apibackend = APIBackend(self.logger, self.db, self.config, expose_real_errors=True)
+        self.apibackend = APIBackend(self.logger, self.db, self.authstore, self.config, expose_real_errors=True)
 
         cherrypy.tree.mount(self.apibackend, '/')
         cherrypy.engine.start()
@@ -75,13 +78,18 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         """
         Verify bad requests are rejected
         """
-        response = self.request('/')
-        self.assertEqual(response.output_status, '404 Not Found')
+        #raise unittest.SkipTest("test disabled because add_raw has been removed")
+
+        response = self.request('/', return_error=True)
+        self.assertEqual(response.output_status, '500 Internal Server Error')
+        self.assertIn('404 Not Found', response.body[0])
 
     def test_add_raw_request_wrong_version(self):
         """
         Verify add_raw request with wrong version is rejected
         """
+        raise unittest.SkipTest("test disabled because add_raw has been removed")
+
         a = {'add_raw': {},
              'version': 9999,
              }
@@ -98,6 +106,8 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         """
         Verify add_raw request with missing data is rejected
         """
+        raise unittest.SkipTest("test disabled because add_raw has been removed")
+
         for req_field in ['data']:
             a = {'add_raw': {'foo': 'bar'},
                  'version': 1,

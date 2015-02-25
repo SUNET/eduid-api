@@ -71,7 +71,7 @@ class EduIDAPIConfig():
 
     :param filename: Path to INI file.
     :param debug: Debug setting, from command line parsing.
-    :type filename: basestring
+    :type filename: str | unicode
     :type debug: bool
 
     :type yhsm: pyhsm.YHSM | None
