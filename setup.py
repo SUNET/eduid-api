@@ -22,7 +22,7 @@ requires = [
     'cherrypy == 3.6.0',
     'simplejson >= 3.6.5',
     'jose >= 0.2.2',
-    'vccs_client == 0.4.1',
+    'vccs_client >= 0.4.2',
     'qrcode >= 5.1',
     'requests >= 2.5.1',
     'pyhsm >= 1.0.3'
