@@ -32,7 +32,6 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
-import os
 import bson
 import base64
 import vccs_client
@@ -40,6 +39,7 @@ import vccs_client
 import eduid_api.authuser
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
+from eduid_api.aead import OATHAEAD
 
 import qrcode
 import qrcode.image.svg
@@ -362,79 +362,6 @@ class AddTokenAction(object):
         """
         """
         self.aead = OATHAEAD(self._logger, self._config)
-
-
-class OATHAEAD(object):
-    """
-    Contact AEAD generation service and generate a new AEAD
-    for an OATH credential.
-
-    Since OATH credentials would be useless unless we can communicate the HMAC key to
-    the user, we can't just ask the VCCS backend to generate the credential and just
-    give us a reference. Instead, we have to ask an OATH AEAD generating service to
-    generate the OATH AEAD that will later on be usable for authenticating the user,
-    but also give us the actual HMAC key.
-
-    :param logger: logging object
-    :param config: config object
-
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
-    """
-    def __init__(self, logger, config):
-        self._logger = logger
-        self._config = config
-
-        claims = {'version': 1,
-                  'nonce': os.urandom(8).encode('hex'),  # Not AEAD nonce, just 'verify response' nonce
-                  'length': 20,                          # OATH is HMAC-SHA1 == 160 bits == 20 bytes
-                  'plaintext': True,                     # Need the plaintext to share with the user
-                  }
-        url = self._config.oath_aead_gen_url
-        req = eduid_api.request.MakeRequest(claims, self._logger, self._config)
-        api_key = self._config.keys.lookup_by_url(url)
-        if not api_key:
-            self._logger.error("No API Key found for URL {!r}".format(url))
-            raise EduIDAPIError("No API Key found for OATH AEAD service")
-        req.send_request(url, 'request', api_key[0])
-        data = req.decrypt_response()
-        self._logger.debug("Got response: {!r}".format(data))
-        if data['status'] != 'OK':
-            self._logger.error("OATH AEAD generation failed: {!r}".format(data.get('reason')))
-            raise EduIDAPIError("OATH AEAD generation failed")
-        self._data = data['aead']
-
-    @property
-    def secret(self):
-        """
-        The plaintext HMAC key. Called 'secret' to get filtered in Sentry reports.
-        :rtype: str | unicode
-        """
-        return self._data['secret']
-
-    @property
-    def key_handle(self):
-        """
-        The YubiHSM key handle that was used to generate the AEAD.
-        :rtype: int
-        """
-        return self._data['key_handle']
-
-    @property
-    def aead(self):
-        """
-        The AEAD.
-        :rtype: str | unicode
-        """
-        return self._data['data']
-
-    @property
-    def nonce(self):
-        """
-        The AEAD nonce.
-        :rtype: str | unicode
-        """
-        return self._data['nonce']
 
 
 def add_token(req, authstore, logger, config):

@@ -32,10 +32,9 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
-import os
-
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
+from eduid_api.aead import YHSM_OATHAEAD
 
 
 class AEADGenRequest(BaseRequest):
@@ -93,34 +92,6 @@ class AEADGenRequest(BaseRequest):
         return bool(self._parsed_req.get('plaintext', False))
 
 
-class OATHAEAD(object):
-    """
-    Contact AEAD generation service and generate a new AEAD for an OATH credential.
-
-    :param logger: logging object
-    :param config: config object
-
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
-    """
-    def __init__(self, logger, config, num_bytes = 20):
-        self.keyhandle = config.oath_aead_keyhandle
-        self._logger = logger
-        if not self.keyhandle:
-            raise EduIDAPIError('No OATH AEAD keyhandle configured')
-
-        self._logger.debug("Generating {!r} bytes AEAD using key_handle 0x{:x}".format(num_bytes, self.keyhandle))
-
-        from_os = os.urandom(num_bytes).encode('hex')
-        from_hsm = config.yhsm.random(num_bytes)
-        # XOR together num_bytes from the YubiHSM's RNG with nu_bytes from /dev/urandom.
-        xored = ''.join([chr(ord(a) ^ ord(b)) for (a, b) in zip(from_hsm, from_os)])
-        self.secret = xored.encode('hex')
-        aead = config.yhsm.generate_aead_simple(chr(0x0), self.keyhandle, self.secret)
-        self.aead = aead.data.encode('hex')
-        self.nonce = aead.nonce.encode('hex')
-
-
 class AEADGenAction(object):
     """
     Generate a new AEAD using a YubiHSM.
@@ -139,7 +110,7 @@ class AEADGenAction(object):
         self._config = config
         self._status = False
 
-        self.aead = OATHAEAD(logger, config, num_bytes = self._request.length)
+        self.aead = YHSM_OATHAEAD(logger, config, num_bytes = self._request.length)
         self._status = True
 
     def response(self):
