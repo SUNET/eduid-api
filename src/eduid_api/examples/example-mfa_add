@@ -2,7 +2,7 @@
 #
 # Produce example JSON to be POSTed to API backend
 #
-# $ ./example-json http://localhost:8511/mfa_add
+# $ ./example-mfa_add http://localhost:8511/mfa_add
 #
 #
 
@@ -61,6 +61,7 @@ def decrypt_and_verify(plaintext, decr_key, signing_key):
     return jwt
 
 def main():
+    sys.stderr.write("Claims:\n\n")
     sys.stderr.write(json.dumps(claims, sort_keys=True, indent=4) + '\n')
 
     jwe = sign_and_encrypt(claims, priv_jwk)
