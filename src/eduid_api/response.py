@@ -68,6 +68,7 @@ class BaseResponse(object):
         :rtype: str
         """
         sign_key = self._config.keys.private_key
+        self._logger.debug("Signing response using key {!r}".format(sign_key))
         jws = jose.sign(self._data, sign_key.jwk, alg = self._config.jose_alg)
         signed_claims = {'v1': jose.serialize_compact(jws)}
         self._logger.debug("Signed response: {!r}".format(signed_claims))
