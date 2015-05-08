@@ -85,7 +85,7 @@ class MFAAddRequest(BaseRequest):
                 raise EduIDAPIError("No {!r} in request".format(req_field))
 
         if int(self._parsed_req['version']) != 1:
-            raise EduIDAPIError("Unknown version in request".format(req_field))
+            raise EduIDAPIError("Unknown version in request".format(self._parsed_req['version']))
 
         if self.token_type == 'OATH':
             if 'OATH' not in self._parsed_req:
