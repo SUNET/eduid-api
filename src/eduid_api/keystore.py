@@ -209,10 +209,21 @@ class APIKey(object):
         :rtype: dict
         """
         if not self._key:
-            self._key = self._data.get('JWK')
-            if 'file' in self._key:
-                with open(self._key['file']) as fd:
-                    self._key['k'] = fd.read()
+            if 'file' in self._data.get('JWK'):
+                # If configuration looks like this:
+                #  {"dash-fre-1": {"JWK": {"file": "/path/to/client-dash-fre-1.pem"},
+                #    ...
+                # then load the private key from the path supplied.
+                _keyfile = self._data.get('JWK')['file']
+                try:
+                    fd = open(_keyfile)
+                    self._key = dict(k = fd.read())
+                except Exception as ex:
+                    raise EduIDAPIError("Failed loading key file {!r}: {!r}".format(_keyfile, ex))
+            else:
+                self._key = self._data.get('JWK')
+            if not 'k' in self._key:
+                EduIDAPIError("Bad JWK for key {!r}: {!r}".format(self, self._key))
         return self._key
 
     @property
