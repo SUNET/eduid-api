@@ -275,7 +275,8 @@ class AddTokenAction(object):
         self._logger = logger
         self._config = config
         self.aead = None
-        self._token_id = bson.ObjectId()  # unique id for new token
+        self._user_id = str(bson.ObjectId())  # unique id for new user  XXX randomize
+        self._token_id = str(bson.ObjectId())  # unique id for new token  XXX randomize
         self._status = None
         self._factor = None
         self._user = None
@@ -293,7 +294,7 @@ class AddTokenAction(object):
             token_type = 'oath-{!s}'.format(self._request.token.type)
             self._factor = vccs_client.VCCSOathFactor(
                 token_type,
-                str(self._token_id),
+                self._token_id,
                 nonce = self.aead.nonce,
                 aead = self.aead.aead,
                 key_handle = self.aead.key_handle,
@@ -302,10 +303,9 @@ class AddTokenAction(object):
                 )
         else:
             raise NotImplemented()
-        self._logger.debug("Calling VCCS client at {!r} to add factor {!r}".format(
-            self._config.vccs_base_url, self._factor))
         client = vccs_client.VCCSClient(base_url=self._config.vccs_base_url)
-        client.add_credentials(str(self._user.user_id), [self._factor])
+        self._logger.debug("Extra debug: Adding credential {!r}".format(self._factor.credential_id))
+        client.add_credentials(str(self._user_id), [self._factor])
         self._status = True
 
     def add_to_authstore(self):
@@ -322,6 +322,7 @@ class AddTokenAction(object):
             'status': 'enabled',
             'owner': self._request.signing_key.owner,
             'factors': factors,
+            'user_id': self._user_id
         }
         self._logger.debug("Adding user to authstore: {!r}".format(user_dict))
         self._user = eduid_api.authuser.from_dict(user_dict)
@@ -348,7 +349,7 @@ class AddTokenAction(object):
                 key_uri = self._request.token.key_uri(self.aead)
                 buf = StringIO.StringIO()
                 qrcode.make(key_uri).save(buf)
-                self._logger.info("Created authuser with id {!r}, credential id {!r}".format(self._user.user_id,
+                self._logger.info("Created authuser with id {!s}, credential id {!s}".format(self._user.user_id,
                                                                                              self._token_id))
                 res['OATH'] = {'user_id': self._user.user_id,
                                'hmac_key': self.aead.secret,
