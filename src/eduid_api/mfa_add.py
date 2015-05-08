@@ -305,7 +305,7 @@ class AddTokenAction(object):
         self._logger.debug("Calling VCCS client at {!r} to add factor {!r}".format(
             self._config.vccs_base_url, self._factor))
         client = vccs_client.VCCSClient(base_url=self._config.vccs_base_url)
-        client.add_credentials(str(self._token_id), [self._factor])
+        client.add_credentials(str(self._user.user_id), [self._factor])
         self._status = True
 
     def add_to_authstore(self):
