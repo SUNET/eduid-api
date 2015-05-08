@@ -40,12 +40,13 @@ XXX this is MongoDB specific for now.
 
 import pymongo
 
+
 class EduIDAPIDB():
     """
     Database backend (mongodb) for eduID API.
     """
 
-    def __init__(self, uri, conn=None, collection='eduid_api', **kwargs):
+    def __init__(self, uri, conn=None, dbname='eduid_api', **kwargs):
         if conn is not None:
             self.connection = conn
         else:
@@ -53,11 +54,11 @@ class EduIDAPIDB():
                 self.connection = pymongo.MongoReplicaSetClient(uri, **kwargs)
             else:
                 self.connection = pymongo.MongoClient(uri, **kwargs)
-        self.collection = self.connection[collection]
+        self.db = self.connection[dbname]
 
     @property
     def users(self):
         """
         Return well-known collection `users'.
         """
-        return self.collection.users
+        return self.db.users
