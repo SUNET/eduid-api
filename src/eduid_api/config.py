@@ -43,6 +43,10 @@ from eduid_api.common import EduIDAPIError
 
 _CONFIG_DEFAULTS = {'debug': False,            # overwritten in EduIDAPIConfig.__init__()
                     'logdir': None,
+                    'logfile': None,
+                    'syslog': '1',                    # '1' for True, '0' for False
+                    'syslog_socket': '/dev/log',
+                    'syslog_debug': '0',              # '1' for True, '0' for False
                     'mongodb_uri': '',
                     'add_raw_allow': '',       # comma-separated list of IP addresses
                     'listen_addr': '0.0.0.0',
@@ -121,6 +125,35 @@ class EduIDAPIConfig():
         return res
 
     @property
+    def logfile(self):
+        """
+        Path to application logfile. Something like '/var/log/idp/eduid_idp.log' maybe.
+        """
+        res = self.config.get(self.section, 'logfile')
+        if not res:
+            res = None
+        return res
+
+    @property
+    def syslog(self):
+        """
+        Set to True to log to syslog (boolean).
+
+        :rtype: bool
+        """
+        return self.config.getboolean(self.section, 'syslog')
+
+    @property
+    def syslog_socket(self):
+        """
+        Syslog socket to log to (string). Something like '/dev/log' maybe.
+        """
+        res = self.config.get(self.section, 'syslog_socket')
+        if not res:
+            res = None
+        return res
+
+    @property
     def mongodb_uri(self):
         """
         MongoDB connection URI. See MongoDB documentation for details.
@@ -148,6 +181,13 @@ class EduIDAPIConfig():
         :rtype: bool
         """
         return self.config.getboolean(self.section, 'debug')
+
+    @property
+    def syslog_debug(self):
+        """
+        Set to True to log debug messages to syslog (also requires syslog_socket) (boolean).
+        """
+        return self.config.getboolean(self.section, 'syslog_debug')
 
     @property
     def listen_addr(self):

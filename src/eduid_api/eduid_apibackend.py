@@ -156,6 +156,8 @@ class APIBackend(object):
         """
         self.remote_ip = cherrypy.request.remote.ip
 
+        self.logger.debug("Extra debug: mfa_add request:{!r}".format(request))
+
         # Parse request and handle any errors
         fun = lambda: eduid_api.mfa_add.MFAAddRequest(request, self.remote_ip, self.logger, self.config)
         success, req = self._parse_request(fun, 'mfa_add')
@@ -298,7 +300,11 @@ class APIBackend(object):
         self.logger.debug("handle_error() invoked")
         cherrypy.response.status = 500
         res = eduid_api.response.ErrorResponse('Server Error', self.logger, self.config)
-        cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
+        try:
+            cherrypy.response.body = res.to_string(remote_ip = self.remote_ip)
+        except EduIDAPIError as exc:
+            # This error is typically EduIDAPIError("No API Key found - can't encrypt response")
+            cherrypy.response.body = str(exc.reason) + "\n"
 
     def error_page_default(self, status, message, traceback, version):
         """
@@ -335,7 +341,7 @@ def main(myname = 'eduid_api'):
 
     # initialize various components
     config = eduid_api.config.EduIDAPIConfig(args.config_file, args.debug)
-    logger = eduid_api.log.EduIDAPILogger(myname, debug = config.debug)
+    logger = eduid_api.log.EduIDAPILogger(myname, config)
     if config.mongodb_uri:
         db = eduid_api.db.EduIDAPIDB(config.mongodb_uri)
         authstore = eduid_api.authstore.APIAuthStoreMongoDB(config.mongodb_uri, logger)

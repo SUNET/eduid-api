@@ -192,7 +192,7 @@ class AddOATHTokenRequest(object):
 class AddU2FTokenRequest(object):
 
     """
-    Parse the 'OATH' part of an MFA add request.
+    Parse the 'U2F' part of an MFA add request.
 
     Example parsed_req:
 

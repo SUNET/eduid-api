@@ -32,6 +32,7 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
+import os
 import sys
 import logging
 import logging.handlers
@@ -43,21 +44,19 @@ class EduIDAPILogger():
     Simple class to do logging in a unified way.
     """
 
-    def __init__(self, myname, context = '', syslog = True, debug = False):
+    def __init__(self, myname, config, context = ''):
         """
         :param myname: name of application
+        :param config: EduIDAPIConfig
         :param context: auxillary data to appear in all audit log messages
-        :param syslog: log to syslog or not?
-        :param debug: controls log verbosity
         :type myname: basestring
+        :type config: EduIDAPIConfig
         :type context: basestring
-        :type syslog: bool
-        :type debug: bool
         """
         self.context = context
 
         self.logger = logging.getLogger(myname)
-        if debug:
+        if config.debug:
             self.logger.setLevel(logging.DEBUG)
             # log to stderr when debugging
             formatter = logging.Formatter('%(asctime)s %(name)s %(threadName)s: %(levelname)s %(message)s')
@@ -66,10 +65,22 @@ class EduIDAPILogger():
             self.logger.addHandler(stream_h)
         else:
             self.logger.setLevel(logging.INFO)
-        if syslog:
-            syslog_h = logging.handlers.SysLogHandler()
-            formatter = logging.Formatter('%(name)s: %(levelname)s %(message)s')
+
+        if config.logfile:
+            _logfile = config.logfile
+            if not _logfile.startswith('/'):
+                _logfile = os.path.join(config.logdir, config.logfile)
+            formatter = logging.Formatter('%(asctime)s %(name)s %(threadName)s: %(levelname)s %(message)s')
+            file_h = logging.handlers.RotatingFileHandler(_logfile, maxBytes=10 * 1024 * 1024)
+            file_h.setFormatter(formatter)
+            self.logger.addHandler(file_h)
+        if config.syslog:
+            syslog_h = logging.handlers.SysLogHandler(config.syslog_socket)
+            formatter = logging.Formatter('%(name)s: %(message)s')
             syslog_h.setFormatter(formatter)
+            syslog_h.setLevel(logging.INFO)
+            if config.syslog_debug:
+                syslog_h.setLevel(logging.DEBUG)
             self.logger.addHandler(syslog_h)
 
     def audit(self, data):

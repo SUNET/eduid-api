@@ -75,6 +75,9 @@ class BaseRequest():
         else:
             try:
                 decrypted = self._decrypt(request)
+                if not decrypted:
+                    self._logger.warning("Could not decrypt request from {!r}".format(remote_ip))
+                    raise EduIDAPIError("Failed decrypting request")
                 verified = self._verify(decrypted, remote_ip)
                 if not verified:
                     self._logger.warning("Could not verify decrypted request from {!r}".format(remote_ip))
@@ -128,11 +131,12 @@ class BaseRequest():
         try:
             decrypted = jose.decrypt(jwe, decr_key.jwk, expiry_seconds = decr_key.expiry_seconds)
             self._logger.debug("Decrypted {!r}".format(decrypted))
+
         except jose.Expired as ex:
             self._logger.warning("Request encrypted with key {!r} has expired: {!r}".format(decr_key, ex))
         except jose.Error as ex:
             self._logger.warning("Failed decrypt with key {!r}: {!r}".format(decr_key, ex))
-            pass
+            raise EduIDAPIError('Could not decrypt request')
 
         if not 'v1' in decrypted.claims:
             self._logger.error("No 'v1' in decrypted claims: {!r}".format(decrypted))
