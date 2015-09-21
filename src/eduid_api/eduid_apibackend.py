@@ -116,7 +116,7 @@ class APIBackend(object):
                                 })
 
     @cherrypy.expose
-    def mfa_add(self, request=None):
+    def mfa_add(self, **data):
         """
         Create a new MultiFactor Authentication token for someone.
 
@@ -156,7 +156,8 @@ class APIBackend(object):
         """
         self.remote_ip = cherrypy.request.remote.ip
 
-        self.logger.debug("Extra debug: mfa_add request:{!r}".format(request))
+        request = data.get('request')
+        self.logger.debug("Extra debug: mfa_add request:{!r}".format(data))
 
         # Parse request and handle any errors
         fun = lambda: eduid_api.mfa_add.MFAAddRequest(request, self.remote_ip, self.logger, self.config)

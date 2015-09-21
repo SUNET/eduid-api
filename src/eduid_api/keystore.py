@@ -102,6 +102,19 @@ class KeyStore(object):
         res = [this for this in self._keys if url in this.urls]
         return res
 
+    def lookup_by_name(self, name):
+        """
+        Return the APIKey with a matching name.
+
+        :param name: Name of key
+        :type name: str | unicode
+
+        :rtype: APIKey()
+        """
+        res = [this for this in self._keys if name == this.name]
+        if res:
+            return res[0]
+
     @property
     def private_key(self):
         """

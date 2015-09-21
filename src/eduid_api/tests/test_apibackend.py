@@ -38,6 +38,8 @@ Test the eduID API backend.
 """
 
 import os
+import jose
+import pprint
 import unittest
 import pkg_resources
 
@@ -48,16 +50,17 @@ import simplejson as json
 import eduid_api
 from eduid_api.eduid_apibackend import APIBackend
 from eduid_api.log import EduIDAPILogger
+from eduid_api.keystore import APIKey
 
 
 class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
 
     def setUp(self):
-        debug = False
+        debug = True
         datadir = pkg_resources.resource_filename(__name__, 'data')
         self.config_file = os.path.join(datadir, 'test_config.ini')
         self.config = eduid_api.config.EduIDAPIConfig(self.config_file, debug)
-        self.logger = eduid_api.log.EduIDAPILogger('test_apibackend', syslog=False)
+        self.logger = eduid_api.log.EduIDAPILogger('test_apibackend', self.config)
         try:
             self.db = eduid_api.db.EduIDAPIDB(self.config.mongodb_uri)
             self.authstore = eduid_api.authstore.APIAuthStoreMongoDB(self.config.mongodb_uri, self.logger)
@@ -66,6 +69,20 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
             self.db = None
             self.authstore = None
 
+        # load example certificate and key
+        _keystore_data = {"self": {"JWK": {"file": os.path.join(datadir, 'example.pem')},
+                                   "ip_addresses": ["127.0.0.1",
+                                                    ],
+                                   "allowed_commands": ["mfa_add"],
+                                   "owner": "example.org"
+        },
+
+                          "_private": {"JWK": {"file": os.path.join(datadir, 'example.key')},
+                                       "ip_addresses": []
+                          }
+        }
+        self.config.keys._keys = [APIKey(name, value) for (name, value) in _keystore_data.items()]
+
         self.apibackend = APIBackend(self.logger, self.db, self.authstore, self.config, expose_real_errors=True)
 
         cherrypy.tree.mount(self.apibackend, '/')
@@ -73,6 +90,21 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
 
     def tearDown(self):
         cherrypy.engine.exit()
+
+    def _sign_and_encrypt(self, claims, priv_jwk, server_jwk, alg = 'RS256'):
+        jws = jose.sign(claims, priv_jwk, alg=alg)
+        signed_claims = {'v1': jose.serialize_compact(jws)}
+        jwe = jose.encrypt(signed_claims, server_jwk)
+        return jwe
+
+    def _decrypt_and_verify(self, plaintext, decr_key, signing_key):
+        jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
+        decrypted = jose.decrypt(jwe, decr_key)
+        if not 'v1' in decrypted.claims:
+            return False
+        to_verify = jose.deserialize_compact(decrypted.claims['v1'])
+        jwt = jose.verify(to_verify, signing_key)
+        return jwt
 
     def test_bad_request(self):
         """
@@ -144,3 +176,38 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
                          }
                     }
         self.assertEqual(res, expected)
+
+    def test_mfa_add_request(self):
+        """
+        Test basic ability to parse an mfa_add request.
+
+        :return:
+        """
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'digits': 6,
+                           'issuer': 'TestIssuer',
+                           'account': 'user@example.org',
+                           }
+                  }
+        priv_jwk = self.config.keys.private_key.jwk
+        server_jwk = self.config.keys.lookup_by_name("self").jwk
+        jwe = self._sign_and_encrypt(claims, priv_jwk, server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        response = self.request('/mfa_add', request=serialized, return_error=True)
+
+        jwt = self._decrypt_and_verify(response.body[0], priv_jwk, server_jwk)
+
+        response_claims = jwt.claims
+
+        self.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+
+        self.assertEqual(response_claims,
+                         {u'nonce': nonce.encode('hex'),
+                          u'reason': u'No API Key found for OATH AEAD service',
+                          u'status': u'FAIL',
+                          u'version': 1,
+                          })
