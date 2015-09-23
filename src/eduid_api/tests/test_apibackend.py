@@ -57,8 +57,8 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
 
     def setUp(self):
         debug = True
-        datadir = pkg_resources.resource_filename(__name__, 'data')
-        self.config_file = os.path.join(datadir, 'test_config.ini')
+        self.datadir = pkg_resources.resource_filename(__name__, 'data')
+        self.config_file = os.path.join(self.datadir, 'test_config.ini')
         self.config = eduid_api.config.EduIDAPIConfig(self.config_file, debug)
         self.logger = eduid_api.log.EduIDAPILogger('test_apibackend', self.config)
         try:
@@ -70,14 +70,14 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
             self.authstore = None
 
         # load example certificate and key
-        _keystore_data = {"self": {"JWK": {"file": os.path.join(datadir, 'example.pem')},
+        _keystore_data = {"self": {"JWK": {"file": os.path.join(self.datadir, 'example.pem')},
                                    "ip_addresses": ["127.0.0.1",
                                                     ],
                                    "allowed_commands": ["mfa_add"],
                                    "owner": "example.org"
         },
 
-                          "_private": {"JWK": {"file": os.path.join(datadir, 'example.key')},
+                          "_private": {"JWK": {"file": os.path.join(self.datadir, 'example.key')},
                                        "ip_addresses": []
                           }
         }
@@ -97,13 +97,13 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         jwe = jose.encrypt(signed_claims, server_jwk)
         return jwe
 
-    def _decrypt_and_verify(self, plaintext, decr_key, signing_key):
+    def _decrypt_and_verify(self, plaintext, decr_key, signing_key, alg = 'RS256'):
         jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
         decrypted = jose.decrypt(jwe, decr_key)
         if not 'v1' in decrypted.claims:
             return False
         to_verify = jose.deserialize_compact(decrypted.claims['v1'])
-        jwt = jose.verify(to_verify, signing_key)
+        jwt = jose.verify(to_verify, signing_key, alg=alg)
         return jwt
 
     def test_bad_request(self):
