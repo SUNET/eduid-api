@@ -181,7 +181,7 @@ class BaseRequest():
                 self._logger.debug("Tried verifying signature using key {!r}: {!r}".format(key, ex))
                 pass
 
-        self._logger.warning("Failed verifying signature on requset from {!r} using keys {!r}".format(
+        self._logger.warning("Failed verifying signature on request from {!r} using keys {!r}".format(
             remote_ip, keys
         ))
         return False
