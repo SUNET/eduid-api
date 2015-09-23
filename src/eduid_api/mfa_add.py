@@ -34,6 +34,7 @@
 
 import bson
 import base64
+import requests
 import vccs_client
 
 import eduid_api.authuser
@@ -181,12 +182,13 @@ class AddOATHTokenRequest(object):
 
         :rtype: str
         """
-        return "otpauth://{oath_type}/{issuer}:{account}?secret={secret}&issuer={issuer}".format(
+        uri = "otpauth://{oath_type}/{issuer}:{account}?secret={secret}&issuer={issuer}".format(
             oath_type = self.type,
             issuer = self.issuer,
             account = self.account,
             secret = base64.b32encode(aead.secret.decode('hex')),
         )
+        return requests.utils.requote_uri(uri)
 
 
 class AddU2FTokenRequest(object):
