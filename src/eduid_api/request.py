@@ -168,7 +168,7 @@ class BaseRequest():
                 self._logger.debug("Ignoring key {!r}".format(key))
                 continue
             try:
-                jwt = jose.verify(decrypted, key.jwk)
+                jwt = jose.verify(decrypted, key.jwk, alg = self._config.jose_alg)
                 self._logger.debug("Good signature on request from {!r} using key {!r}: {!r}".format(
                     remote_ip, key, jwt
                 ))
@@ -276,7 +276,7 @@ class MakeRequest(object):
             raise EduIDAPIError("No 'v1' in decrypted claims")
 
         to_verify = jose.deserialize_compact(decrypted.claims['v1'])
-        jwt = jose.verify(to_verify, self._api_key.jwk)
+        jwt = jose.verify(to_verify, self._api_key.jwk, alg = self._config.jose_alg)
         self._logger.debug("Good signature on response to request using key: {!r}".format(
             self._api_key.jwk
         ))
