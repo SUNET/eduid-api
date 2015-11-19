@@ -14,7 +14,7 @@ try:
 except IOError:
     pass
 
-version = '0.2.4b2'
+version = '0.2.4'
 
 requires = [
     'eduid_am >= 0.4.9',
