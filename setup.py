@@ -14,7 +14,7 @@ try:
 except IOError:
     pass
 
-version = '0.2.4b2'
+version = '0.2.4'
 
 requires = [
     'eduid_am >= 0.4.9',
@@ -25,7 +25,7 @@ requires = [
     'vccs_client >= 0.4.2',
     'qrcode >= 5.1',
     'requests >= 2.5.1',
-    'pyhsm >= 1.0.3'
+    'pyhsm > 1.0.2'
 ]
 
 
