@@ -50,18 +50,24 @@ def parse_args():
                         dest='ini',
                         default='/etc/nagios/plugins.ini',
                         help='INI config file to load data from',
-                        metavar='HOST',
+                        metavar='FILE',
                         )
     parser.add_argument('-s', '--section',
                         dest='section',
                         default='mfaapi',
                         help='INI config section to load data from',
-                        metavar='HOST',
+                        metavar='NAME',
                         )
     parser.add_argument('--debug',
                         dest='debug',
                         action='store_true', default=False,
                         help='Enable debug operation'
+                        )
+    parser.add_argument('--code',
+                        dest='code',
+                        default=None,
+                        help='OATH code to use (default: auto)',
+                        metavar='CODE',
                         )
 
     args = parser.parse_args()
@@ -174,10 +180,14 @@ def mfa_auth(keys, args, logger):
     :type logger: logging.logger
     :return: True, or does not return at all
     """
-    totp_counter = int(time.time()) / 30
-    code = oath_code(args.hmac_key, totp_counter)
+    if args.code is None:
+        totp_counter = int(time.time()) / 30
+        code = oath_code(args.hmac_key, totp_counter)
 
-    logger.debug('Calculated code {!s} for TOTP counter {!s}'.format(code, totp_counter))
+        logger.debug('Calculated code {!s} for TOTP counter {!s} (HMAC {!r})'.format(code, totp_counter, args.hmac_key))
+    else:
+        totp_counter = 'manual'
+        code = args.code
 
     claims = {'version': 1,
               'token_type': 'OATH',
@@ -250,7 +260,7 @@ def oath_code(hmac_key, counter, length = 6):
     :rtype: str | unicode
     """
     counter = struct.pack('>Q', counter)
-    hmac_result = hmac.new(hmac_key, counter, hashlib.sha1).digest()
+    hmac_result = hmac.new(hmac_key.decode('hex'), counter, hashlib.sha1).digest()
     code = oath_truncate(hmac_result, length = length)
     fmt = '{{:0{!s}d}}'.format(length)  # leading zero padding
     code_str = fmt.format(code)
