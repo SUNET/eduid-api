@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# Copyright (c) 2013, 2015 NORDUnet A/S
+# Copyright (c) 2013, 2015, 2017 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or

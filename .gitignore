@@ -8,4 +8,5 @@ build/
 dist/
 coverage.xml
 nosetests.xml
+env/
 .idea/

@@ -49,7 +49,6 @@ import simplejson as json
 
 import eduid_api
 from eduid_api.eduid_apibackend import APIBackend
-from eduid_api.log import EduIDAPILogger
 from eduid_api.keystore import APIKey
 
 
@@ -96,6 +95,7 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         signed_claims = {'v1': jose.serialize_compact(jws)}
         jwe = jose.encrypt(signed_claims, server_jwk)
         return jwe
+
 
     def _decrypt_and_verify(self, plaintext, decr_key, signing_key, alg = 'RS256'):
         jwe = jose.deserialize_compact(plaintext.replace("\n", ''))

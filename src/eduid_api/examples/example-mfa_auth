@@ -45,7 +45,7 @@ def sign_and_encrypt(claims, priv_jwk, alg = 'RS256'):
     jwe = jose.encrypt(signed_claims, jwk)
     return jwe
 
-def decrypt_and_verify(plaintext, decr_key, signing_key):
+def decrypt_and_verify(plaintext, decr_key, signing_key, alg = 'RS256'):
     jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
     decrypted = jose.decrypt(jwe, decr_key)
     sys.stderr.write("Decrypted {!r}\n\n".format(decrypted))
@@ -55,7 +55,7 @@ def decrypt_and_verify(plaintext, decr_key, signing_key):
     to_verify = jose.deserialize_compact(decrypted.claims['v1'])
     sys.stderr.write("Decrypted claims to verify: {!r}\n\n".format(to_verify))
 
-    jwt = jose.verify(to_verify, signing_key)
+    jwt = jose.verify(to_verify, signing_key, alg=alg)
     sys.stderr.write("Good signature on request using key:\n{!r}\n\n{!r}\n\n".format(
         signing_key, jwt
     ))

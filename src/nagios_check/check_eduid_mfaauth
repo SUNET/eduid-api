@@ -122,9 +122,9 @@ class Keys(object):
     Object to hold the keys that need to be passed around.
     """
     def __init__(self, server_cert_file, client_key_file):
-        with open(args.server_cert_file) as fd:
+        with open(server_cert_file) as fd:
             self.server_cert = {'k': fd.read(), }
-        with open(args.client_key_file) as fd:
+        with open(client_key_file) as fd:
             self.private_key = {'k': fd.read(), }
 
 
@@ -270,10 +270,10 @@ def oath_code(hmac_key, counter, length = 6):
 def oath_truncate(hmac_result, length=6):
     assert(len(hmac_result) == 20)
     offset = ord(hmac_result[19]) & 0xf
-    bin_code = (ord(hmac_result[offset]) & 0x7f) << 24 \
-               | (ord(hmac_result[offset + 1]) & 0xff) << 16 \
-               | (ord(hmac_result[offset + 2]) & 0xff) << 8 \
-               | (ord(hmac_result[offset + 3]) & 0xff)
+    bin_code = (ord(hmac_result[offset + 0]) & 0x7f) << 24 | \
+               (ord(hmac_result[offset + 1]) & 0xff) << 16 | \
+               (ord(hmac_result[offset + 2]) & 0xff) << 8 | \
+               (ord(hmac_result[offset + 3]) & 0xff)
     return bin_code % (10 ** length)
 
 
@@ -339,4 +339,3 @@ if __name__ == '__main__':
         sys.exit(STATUS['UNKNOWN'])
     except KeyboardInterrupt:
         pass
-

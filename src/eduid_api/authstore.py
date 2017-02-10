@@ -152,11 +152,11 @@ class APIAuthStoreMongoDB(APIAuthStore):
         metadata = {'id': res['_id'],
                     'revision': res['revision'],
                     }
-        cred = eduid_api.authuser.from_dict(res['authuser'],
+        user = eduid_api.authuser.from_dict(res['authuser'],
                                             metadata = metadata,
                                             check_enabled = check_revoked,
                                             )
-        return cred
+        return user
 
     def add_authuser(self, user):
         """
