@@ -38,34 +38,29 @@ eduID API request checking and parsing
 
 import jose
 import requests
-import cherrypy
+from flask import current_app
 
 from eduid_api.common import EduIDAPIError
 
 _TESTING = False
 
 
-class BaseRequest():
+class BaseRequest(object):
     """
     Base request object. Handles decryption and verification of JOSE objects.
 
     :param request: Request to parse (can be dict for testing)
     :param remote_ip: IP address of client
     :param name: The name of the method invoked
-    :param logger: logging object
-    :param config: config object
 
     :type request: str or dict
     :type remote_ip: str | unicode
     :type name: str | unicode
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
     """
 
-    def __init__(self, request, remote_ip, name, logger, config):
+    def __init__(self, request, remote_ip, name):
 
-        self._logger = logger
-        self._config = config
+        self._logger = current_app.logger
         self._signing_key = None
 
         if isinstance(request, dict) and _TESTING:
@@ -84,7 +79,7 @@ class BaseRequest():
                     raise EduIDAPIError("Failed verifying signature")
                 parsed = verified.claims
             except Exception:
-                logger.error("Failed decrypting/verifying request:\n{!r}\n-----\n".format(request), traceback=True)
+                self._logger.error("Failed decrypting/verifying request:\n{!r}\n-----\n".format(request), exc_info=True)
                 raise EduIDAPIError("Failed parsing request")
 
         assert(isinstance(parsed, dict))
@@ -101,7 +96,7 @@ class BaseRequest():
             raise EduIDAPIError("Method {!r} not allowed with this key".format(name))
 
         self._parsed_req = parsed
-        cherrypy.request.eduid_api_parsed_req = parsed
+        #cherrypy.request.eduid_api_parsed_req = parsed
 
     def __repr__(self):
         return ('<{} @{:#x}>'.format(
@@ -122,7 +117,7 @@ class BaseRequest():
         jwe = jose.deserialize_compact(request.replace("\n", ''))
 
         decrypted = None
-        decr_key = self._config.keys.private_key
+        decr_key = current_app.mystate.keys.private_key
         if not decr_key:
             self._logger.error("No asymmetric private key (named '_private') found in the keystore")
             return False
@@ -138,7 +133,7 @@ class BaseRequest():
             self._logger.warning("Failed decrypt with key {!r}: {!r}".format(decr_key, ex))
             raise EduIDAPIError('Could not decrypt request')
 
-        if not 'v1' in decrypted.claims:
+        if 'v1' not in decrypted.claims:
             self._logger.error("No 'v1' in decrypted claims: {!r}".format(decrypted))
             return False
         to_verify = jose.deserialize_compact(decrypted.claims['v1'])
@@ -156,7 +151,7 @@ class BaseRequest():
         :type remote_ip: basestring
         :rtype: jose.JWT or False
         """
-        keys = self._config.keys.lookup_by_ip(remote_ip)
+        keys = current_app.mystate.keys.lookup_by_ip(remote_ip)
 
         if not len(keys):
             self._logger.info("No API keys found for IP address {!r}, can't verify signature".format(remote_ip))
@@ -168,7 +163,7 @@ class BaseRequest():
                 self._logger.debug("Ignoring key {!r}".format(key))
                 continue
             try:
-                jwt = jose.verify(decrypted, key.jwk, alg = self._config.jose_alg)
+                jwt = jose.verify(decrypted, key.jwk, alg = current_app.config['JOSE_ALG'])
                 self._logger.debug("Good signature on request from {!r} using key {!r}: {!r}".format(
                     remote_ip, key, jwt
                 ))
@@ -209,24 +204,19 @@ class MakeRequest(object):
     Create a request for sending somewhere.
 
     :param claims: data to sign, encrypt and send
-    :param logger: logging object
-    :param config: config object
 
     :type claims: dict
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
 
     :type _api_key: eduid_api.keystore.APIKey | None
     :type _claims: dict
     :type signed_claims: dict
     """
-    def __init__(self, claims, logger, config, alg = 'RS256'):
-        self._logger = logger
-        self._config = config
+    def __init__(self, claims, alg = 'RS256'):
+        self._logger = current_app.logger
         self._request_result = None
         self._api_key = None
         self._claims = claims
-        jws = jose.sign(claims, self._config.keys.private_key.jwk, alg=alg)
+        jws = jose.sign(claims, current_app.mystate.keys.private_key.jwk, alg=alg)
         self.signed_claims = {'v1': jose.serialize_compact(jws)}
 
     def send_request(self, url, name, apikey):
@@ -267,7 +257,7 @@ class MakeRequest(object):
         if ciphertext is None:
             ciphertext = self._request_result.text
         jwe = jose.deserialize_compact(ciphertext.replace("\n", ''))
-        priv_key = self._config.keys.private_key
+        priv_key = current_app.mystate.keys.private_key
         if not priv_key.keytype == 'jose':
             raise EduIDAPIError("Non-jose private key unusuable with decrypt_response")
         decrypted = jose.decrypt(jwe, priv_key.jwk)
@@ -276,7 +266,7 @@ class MakeRequest(object):
             raise EduIDAPIError("No 'v1' in decrypted claims")
 
         to_verify = jose.deserialize_compact(decrypted.claims['v1'])
-        jwt = jose.verify(to_verify, self._api_key.jwk, alg = self._config.jose_alg)
+        jwt = jose.verify(to_verify, self._api_key.jwk, alg = current_app.config['JOSE_ALG'])
         self._logger.debug("Good signature on response to request using key: {!r}".format(
             self._api_key.jwk
         ))

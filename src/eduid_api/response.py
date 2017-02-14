@@ -33,7 +33,7 @@
 #
 
 import jose
-import cherrypy
+from flask import current_app
 
 from eduid_api.common import EduIDAPIError
 
@@ -41,17 +41,12 @@ from eduid_api.common import EduIDAPIError
 class BaseResponse(object):
     """
     :param data: Data to put in response
-    :param logger: logging object
-    :param config: config object
 
     :type data: dict
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
     """
-    def __init__(self, data, logger, config):
-        self._logger = logger
-        self._config = config
+    def __init__(self, data):
         self._data = data
+        self._logger = current_app.logger
         assert self._data, dict
         return
 
@@ -67,15 +62,18 @@ class BaseResponse(object):
 
         :rtype: str
         """
-        sign_key = self._config.keys.private_key
+        # XXX remove extra debug with potentially sensitive information in it
+        self._logger.debug("Extra debug: Response:\n{!r}".format(self._data))
+
+        sign_key = current_app.mystate.keys.private_key
         self._logger.debug("Signing response using key {!r}".format(sign_key))
-        jws = jose.sign(self._data, sign_key.jwk, alg = self._config.jose_alg)
+        jws = jose.sign(self._data, sign_key.jwk, alg = current_app.config['JOSE_ALG'])
         signed_claims = {'v1': jose.serialize_compact(jws)}
         self._logger.debug("Signed response: {!r}".format(signed_claims))
         encrypt_key = remote_key
         if not encrypt_key:
             # default to the first key found using the remote_ip in case no key was supplied
-            ip_keys = self._config.keys.lookup_by_ip(remote_ip)
+            ip_keys = current_app.mystate.keys.lookup_by_ip(remote_ip)
             if not ip_keys:
                 self._logger.warning("Found no key for IP {!r}, can't encrypt response:\n{!r}".format(
                     remote_ip, self._data
@@ -92,14 +90,14 @@ class ErrorResponse(BaseResponse):
     Error response class.
     """
 
-    def __init__(self, message, logger, config):
+    def __init__(self, message):
         error = {'version': 1,
                  'status': 'FAIL',
                  'reason': message,
                  }
-        try:
-            if 'nonce' in cherrypy.request.eduid_api_parsed_req:
-                error['nonce'] = cherrypy.request.eduid_api_parsed_req['nonce']
-        except AttributeError:
-            pass
-        BaseResponse.__init__(self, error, logger, config)
+        #try:
+        #    if 'nonce' in cherrypy.request.eduid_api_parsed_req:
+        #        error['nonce'] = cherrypy.request.eduid_api_parsed_req['nonce']
+        #except AttributeError:
+        #    pass
+        BaseResponse.__init__(self, error)

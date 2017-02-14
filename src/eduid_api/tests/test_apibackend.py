@@ -48,7 +48,7 @@ import cptestcase
 import simplejson as json
 
 import eduid_api
-from eduid_api.eduid_apibackend import APIBackend
+from eduid_api.run import APIBackend
 from eduid_api.keystore import APIKey
 
 

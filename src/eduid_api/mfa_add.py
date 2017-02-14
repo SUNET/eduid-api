@@ -73,7 +73,7 @@ class MFAAddRequest(BaseRequest):
     :param logger: logging object
     :param config: config object
     :type request: str
-    :type logger: eduid_api.log.EduIDAPILogger
+    :type logger: logging.logger
     :type config: eduid_api.config.EduIDAPIConfig
 
     :type token: AddOATHTokenRequest | AddU2FTokenRequest
@@ -263,7 +263,7 @@ class AddTokenAction(object):
 
     :type request: MFAAddRequest
     :type authstore: eduid_api.authstore.APIAuthStore
-    :type logger: eduid_api.log.EduIDAPILogger
+    :type logger: logging.logger
     :type config: eduid_api.config.EduIDAPIConfig
 
     :type aead: OATHAEAD
@@ -378,7 +378,7 @@ def add_token(req, authstore, logger, config):
 
     :type req: MFAAddRequest
     :type authstore: eduid_api.authstore.APIAuthStore
-    :type logger: eduid_api.log.EduIDAPILogger
+    :type logger: logging.logger
     :type config: eduid_api.config.EduIDAPIConfig
     :return: Resppnse dict
     :rtype: dict

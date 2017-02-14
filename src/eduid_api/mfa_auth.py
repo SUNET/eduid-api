@@ -32,7 +32,6 @@
 # Author : Fredrik Thulin <fredrik@thulin.net>
 #
 
-import os
 import vccs_client
 
 import eduid_api.authuser
@@ -66,7 +65,7 @@ class MFAAuthRequest(BaseRequest):
     :param logger: logging object
     :param config: config object
     :type request: str
-    :type logger: eduid_api.log.EduIDAPILogger
+    :type logger: logging.logger
     :type config: eduid_api.config.EduIDAPIConfig
 
     :type token: AuthOATHTokenRequest | U2FTokenRequest
@@ -147,7 +146,7 @@ class AuthTokenAction(object):
 
     :type request: MFAAuthRequest
     :type authstore: eduid_api.authstore.APIAuthStore
-    :type logger: eduid_api.log.EduIDAPILogger
+    :type logger: logging.logger
     :type config: eduid_api.config.EduIDAPIConfig
 
     :type _user: eduid_api.authuser.APIAuthUser
@@ -229,7 +228,7 @@ def authenticate(req, authstore, logger, config):
 
     :type req: MFAAuthRequest
     :type authstore: eduid_api.authstore.APIAuthStore
-    :type logger: eduid_api.log.EduIDAPILogger
+    :type logger: logging.logger
     :type config: eduid_api.config.EduIDAPIConfig
     :return: Resppnse dict
     :rtype: dict

@@ -1,5 +1,6 @@
+#!/usr/bin/python
 #
-# Copyright (c) 2013, 2015 NORDUnet A/S
+# Copyright (c) 2013, 2015, 2017 NORDUnet A/S
 # All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or
@@ -33,24 +34,25 @@
 #
 
 """
-Database backend for eduID API backend.
+eduID API backend
 
-XXX this is MongoDB specific for now.
+This is a network service that processes API requests from clients.
+
+See the README.rst file for a more in-depth description.
 """
 
-from eduid_userdb import MongoDB
+import os
+import sys
 
+import eduid_api
 
-class EduIDAPIDB(MongoDB):
-    """
-    Database backend (mongodb) for eduID API.
-    """
-    def __init__(self, uri):
-        MongoDB.__init__(self, db_uri=uri, db_name='eduid_api')
+#progname = os.path.basename(sys.argv[0])
+progname = 'api'
+app = eduid_api.app.init_eduid_api_app(progname)
 
-    @property
-    def users(self):
-        """
-        Return well-known collection `users'.
-        """
-        return self.get_collection('users')
+if __name__ == '__main__':
+    try:
+        app.logger.info('Starting {} app...'.format(progname))
+        app.run()
+    except KeyboardInterrupt:
+        sys.exit(0)

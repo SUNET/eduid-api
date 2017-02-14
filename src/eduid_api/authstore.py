@@ -38,15 +38,17 @@ Store APIAuthUser objects in database.
 This file was copied from the VCCS project.
 """
 
-import pymongo
 import bson
 import time
 
 import eduid_api.authuser
 from eduid_api.authuser import APIAuthUser
+from eduid_userdb.db import MongoDB
+
+import pymongo
 
 
-class APIAuthStore():
+class APIAuthStore(object):
 
     """
     Class providing access to the eduid-API private credential store.
@@ -103,19 +105,12 @@ class APIAuthStoreMongoDB(APIAuthStore):
      }
     """
 
-    def __init__(self, uri, logger, conn=None, db_name="eduid_api", retries=10, **kwargs):
+    def __init__(self, uri, logger, db_name='eduid_api', retries=10, **kwargs):
         APIAuthStore.__init__(self)
         self._logger = logger
-        if conn is not None:
-            self.connection = conn
-        else:
-            if "replicaSet=" in uri:
-                self.connection = pymongo.MongoReplicaSetClient(uri, **kwargs)
-            else:
-                self.connection = pymongo.MongoClient(uri, **kwargs)
-        self.db = self.connection[db_name]
-        self.coll = self.db['authusers']
-        for this in xrange(retries):
+        _db = MongoDB(uri, db_name=db_name, **kwargs)
+        self.coll = _db.get_collection('authusers', database_name = db_name)
+        for this in range(retries):
             try:
                 self.coll.ensure_index([('authuser.factors.id', 1)], name='factor_id_idx', unique=True)
                 break

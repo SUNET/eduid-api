@@ -1,0 +1,272 @@
+#!/usr/bin/env python
+#
+# Nagios check performing monitoring of eduID MFA API
+#
+# Copyright (c) 2017 NORDUnet A/S
+# All rights reserved.
+#
+#   Redistribution and use in source and binary forms, with or
+#   without modification, are permitted provided that the following
+#   conditions are met:
+#
+#     1. Redistributions of source code must retain the above copyright
+#        notice, this list of conditions and the following disclaimer.
+#     2. Redistributions in binary form must reproduce the above
+#        copyright notice, this list of conditions and the following
+#        disclaimer in the documentation and/or other materials provided
+#        with the distribution.
+#     3. Neither the name of the NORDUnet nor the names of its
+#        contributors may be used to endorse or promote products derived
+#        from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Author : Fredrik Thulin <fredrik@thulin.net>
+#
+
+import os
+import sys
+import json
+import jose
+import logging
+import argparse
+import requests
+try:
+    import configparser
+except ImportError:
+    # Python 2
+    import ConfigParser as configparser
+
+# Nagios plugin exit status codes
+STATUS = {'OK': 0,
+          'WARNING': 1,
+          'CRITICAL': 2,
+          'UNKNOWN': 3,
+          }
+
+
+def parse_args():
+    """
+    Parse the command line arguments
+    """
+    parser = argparse.ArgumentParser(description = "eduID MFA Test Nagios plugin",
+                                     add_help = True,
+                                     formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+                                     )
+    parser.add_argument('-H', '--host',
+                        dest='host',
+                        help='Host address to connect to',
+                        metavar='HOST',
+                        )
+    parser.add_argument('-c', '--ini',
+                        dest='ini',
+                        default='/etc/nagios/plugins.ini',
+                        help='INI config file to load data from',
+                        metavar='FILE',
+                        )
+    parser.add_argument('-s', '--section',
+                        dest='section',
+                        default='mfaapi',
+                        help='INI config section to load data from',
+                        metavar='NAME',
+                        )
+    parser.add_argument('--debug',
+                        dest='debug',
+                        action='store_true', default=False,
+                        help='Enable debug operation'
+                        )
+
+    args = parser.parse_args()
+    load_config(args)
+    return args
+
+
+def load_config(args):
+    _defaults = {'test_url': 'https://localhost:8511/mfa_test',
+                 'server_cert_file': 'server.pem',
+                 'client_key_file': 'client.key',
+                 'issuer': 'MFA API Nagios TestIssuer',
+                 }
+    config = configparser.ConfigParser(_defaults)
+
+    if not config.read(args.ini):
+        sys.stderr.write('Failed loading config file: {!r}\n'.format(args.ini))
+        sys.exit(STATUS['UNKNOWN'])
+
+    nosectionwarn = 0
+
+    for key in _defaults.keys():
+        value = _defaults[key]
+        try:
+            value = config.get(args.section, key)
+        except configparser.NoSectionError:
+            if not nosectionwarn:
+                sys.stderr.write("Warning: No section {!r} in INI file {!r}\n".format(args.section, args.ini))
+                nosectionwarn = 1
+            pass
+
+        if not hasattr(args, key) or not getattr(args, key):
+            setattr(args, key, value)
+
+
+def get_logger(args):
+    level = logging.INFO
+    if args.debug:
+        level = logging.DEBUG
+    logging.basicConfig(level = level, stream = sys.stderr,
+                        format='%(asctime)s: %(levelname)s %(message)s')
+    return logging.getLogger('check_eduid_mfatest')
+
+
+class Keys(object):
+    """
+    Object to hold the keys that need to be passed around.
+    """
+    def __init__(self, server_cert_file, client_key_file):
+        with open(server_cert_file) as fd:
+            self.server_cert = {'k': fd.read(), }
+        with open(client_key_file) as fd:
+            self.private_key = {'k': fd.read(), }
+
+
+def mfa_test(keys, args, logger):
+    """
+    Test the authentication API endpoint.
+    :param keys: Loaded JWK keys
+    :param args: Arguments and configuration
+    :param logger: Logging logger
+    :type keys: Keys
+    :type logger: logging.logger
+    :return: True, or does not return at all
+    """
+    claims = {'version': 1,
+              }
+    response = send_claims(claims, args.test_url, keys, args, logger)
+    logger.debug('Test got response: {!s}'.format(response))
+    if type(response) == dict and response.get('status') == 'OK':
+        print('OK response received')
+        return True
+    print ('NOT OK: {!s}'.format(response))
+
+
+def send_claims(claims, url, keys, args, logger):
+    """
+    Create a JWT and send it to an API endpoint URL.
+
+    :param claims:
+    :param url:
+    :param keys: Loaded JWK keys
+    :param args: Arguments and configuration
+    :param logger: Logging logger
+    :type keys: Keys
+    :type logger: logging.logger
+    :return: JWT from response
+    """
+    claims['nonce'] = os.urandom(10).encode('hex')
+
+    if args.debug:
+        sys.stderr.write(json.dumps(claims, sort_keys=True, indent=4) + '\n')
+
+    jwe = sign_and_encrypt(claims, keys, logger)
+
+    logger.debug("Encrypted using JWK:\n{!r}\n\nResulting JWE:\n{!r}".format(keys.server_cert, jwe))
+    logger.debug("Serialized:\n{!r}".format(jose.serialize_compact(jwe)))
+
+    logger.debug("-" * 80)
+    logger.debug("POSTing request to {!r}\n\n".format(url))
+
+    r = requests.post(url, data=dict(request=jose.serialize_compact(jwe)))
+
+    logger.debug("Response from server: {!r}\n".format(r))
+    logger.debug(r.text)
+    logger.debug("-" * 80)
+
+    if r.status_code != 200:
+        return 'Got {!s} {!s} from {!s}'.format(r.status_code, r.reason, url)
+    jwt = decrypt_and_verify(r.text, keys, logger)
+
+    logger.debug("Extracted and pretty-printed claims from JWT:\n{!s}".format(
+        json.dumps(jwt.claims, sort_keys=True, indent=4)))
+
+    return jwt.claims
+
+
+def sign_and_encrypt(claims, keys, logger, alg = 'RS256'):
+    """
+    Decrypt a response and verify it's signature.
+
+    :param claims: Dict with the data to send
+    :param keys: Loaded JWK keys
+    :param logger: Logging logger
+    :param alg: JOSE algorithm to use
+    :type claims: dict
+    :type keys: Keys
+    :type logger: logging.logger
+    :type alg: str | unicode
+    :return: JWE
+    """
+    jws = jose.sign(claims, keys.private_key, alg=alg)
+    logger.debug("JWS before serialization:\n{!r}".format(jws))
+    signed_claims = {'v1': jose.serialize_compact(jws)}
+    logger.debug("Signed claims:\n{!r}".format(signed_claims))
+    jwe = jose.encrypt(signed_claims, keys.server_cert)
+    return jwe
+
+
+def decrypt_and_verify(plaintext, keys, logger, alg = 'RS256'):
+    """
+    Decrypt a response and verify it's signature.
+    :param plaintext:
+    :param keys: Loaded JWK keys
+    :param logger: Logging logger
+    :param alg: JOSE algorithm to use
+    :type plaintext: str | unicode
+    :type keys: Keys
+    :type logger: logging.logger
+    :type alg: str | unicode
+    :return: JWT
+    """
+    jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
+    decrypted = jose.decrypt(jwe, keys.private_key)
+    logger.debug("Decrypted {!r}\n\n".format(decrypted))
+    if 'v1' not in decrypted.claims:
+        logger.info("No 'v1' in decrypted claims: {!r}\n\n".format(decrypted))
+        return False
+    to_verify = jose.deserialize_compact(decrypted.claims['v1'])
+    logger.debug("Decrypted claims to verify: {!r}\n\n".format(to_verify))
+
+    jwt = jose.verify(to_verify, keys.server_cert, alg=alg)
+    logger.debug("Good signature on request using key:\n{!r}\n\n{!r}\n\n".format(
+        keys.server_cert, jwt
+    ))
+    return jwt
+
+
+def main(args, logger):
+    keys = Keys(args.server_cert_file, args.client_key_file)
+
+    return mfa_test(keys, args, logger)
+
+
+if __name__ == '__main__':
+    logger = None
+    try:
+        args = parse_args()
+        logger = get_logger(args)
+        res = main(args, logger)
+        if res:
+            sys.exit(STATUS['OK'])
+        sys.exit(STATUS['UNKNOWN'])
+    except KeyboardInterrupt:
+        pass

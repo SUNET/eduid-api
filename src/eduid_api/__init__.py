@@ -50,15 +50,15 @@ __license__ = 'BSD'
 __authors__ = ['Fredrik Thulin']
 
 import eduid_api.common
-import eduid_api.config
-import eduid_api.log
 import eduid_api.db
 import eduid_api.request
 import eduid_api.response
 import eduid_api.mfa_add
 import eduid_api.mfa_auth
+import eduid_api.mfa_test
 import eduid_api.keystore
 import eduid_api.authstore
 import eduid_api.authuser
 import eduid_api.aead_gen
 import eduid_api.aead
+import eduid_api.app

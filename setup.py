@@ -19,7 +19,7 @@ version = '0.2.5b0'
 requires = [
     'eduid_am >= 0.4.9',
     'pymongo >= 2.8,<3.0',
-    'cherrypy >= 3.6.0',
+    'flask',
     'simplejson >= 3.6.5',
     'jose >= 1.1.1',
     'vccs_client >= 0.4.2',
