@@ -41,12 +41,17 @@ from eduid_api.common import EduIDAPIError
 class BaseResponse(object):
     """
     :param data: Data to put in response
+    :param request: Request being responded to
 
     :type data: dict
+    :type request: eduid_api.request.BaseRequest
     """
-    def __init__(self, data):
+    def __init__(self, data, request):
         self._data = data
         self._logger = current_app.logger
+        self._request = request
+        if 'nonce' not in self._data
+            self._data['nonce'] = request.nonce  # Copy nonce (request id) from request to response
         assert self._data, dict
         return
 
@@ -65,13 +70,22 @@ class BaseResponse(object):
         # XXX remove extra debug with potentially sensitive information in it
         self._logger.debug("Extra debug: Response:\n{!r}".format(self._data))
 
+        #
+        # Sign
+        #
         sign_key = current_app.mystate.keys.private_key
         self._logger.debug("Signing response using key {!r}".format(sign_key))
         jws = jose.sign(self._data, sign_key.jwk, alg = current_app.config['JOSE_ALG'])
         signed_claims = {'v1': jose.serialize_compact(jws)}
         self._logger.debug("Signed response: {!r}".format(signed_claims))
+
+        #
+        # Encrypt
+        #
         encrypt_key = remote_key
         if not encrypt_key:
+            if not remote_ip:
+                remote_ip = self._request.remote_ip
             # default to the first key found using the remote_ip in case no key was supplied
             ip_keys = current_app.mystate.keys.lookup_by_ip(remote_ip)
             if not ip_keys:
@@ -90,7 +104,7 @@ class ErrorResponse(BaseResponse):
     Error response class.
     """
 
-    def __init__(self, message):
+    def __init__(self, message, request):
         error = {'version': 1,
                  'status': 'FAIL',
                  'reason': message,
@@ -100,4 +114,4 @@ class ErrorResponse(BaseResponse):
         #        error['nonce'] = cherrypy.request.eduid_api_parsed_req['nonce']
         #except AttributeError:
         #    pass
-        BaseResponse.__init__(self, error)
+        BaseResponse.__init__(self, error, request)

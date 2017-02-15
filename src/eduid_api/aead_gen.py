@@ -132,3 +132,16 @@ class AEADGenAction(object):
         self._logger.debug("Creating {!r} response for {!r}".format(self._status, self._request))
         res['nonce'] = self._request.nonce  # Copy nonce (request id) from request to response
         return res
+
+
+def make_aead(req, logger, config):
+    aead = YHSM_OATHAEAD(logger, config, num_bytes = req.length)
+    res = {'status': 'OK',
+           'aead': {'data': aead.aead,
+                    'nonce': aead.nonce,
+                    'key_handle': aead.keyhandle,
+                    }}
+    if req.plaintext:
+        res['aead']['secret'] = aead.secret
+    logger.debug("Creating {!r} response for {!r}".format(res['status'], req))
+    return res

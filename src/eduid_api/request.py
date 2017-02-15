@@ -49,54 +49,59 @@ class BaseRequest(object):
     """
     Base request object. Handles decryption and verification of JOSE objects.
 
-    :param request: Request to parse (can be dict for testing)
+    :param request_str: Request to parse (can be dict for testing)
     :param remote_ip: IP address of client
     :param name: The name of the method invoked
+    :param required: Names of required data fields to check for
 
-    :type request: str or dict
+    :type request_str: str | unicode | dict
     :type remote_ip: str | unicode
     :type name: str | unicode
+    :type required: list
     """
 
-    def __init__(self, request, remote_ip, name):
+    def __init__(self, request_str, remote_ip, name, required=None):
 
+        self.remote_ip = remote_ip
         self._logger = current_app.logger
         self._signing_key = None
 
-        if isinstance(request, dict) and _TESTING:
+        if isinstance(request_str, dict) and _TESTING:
             # really only accept a dict when testing, to avoid accidental
             # acceptance of unsigned requests
-            parsed = request
+            parsed = request_str
         else:
             try:
-                decrypted = self._decrypt(request)
+                decrypted = self._decrypt(request_str)
                 if not decrypted:
-                    self._logger.warning("Could not decrypt request from {!r}".format(remote_ip))
-                    raise EduIDAPIError("Failed decrypting request")
+                    self._logger.warning("Could not decrypt request_str from {!r}".format(remote_ip))
+                    raise EduIDAPIError("Failed decrypting request_str")
                 verified = self._verify(decrypted, remote_ip)
                 if not verified:
-                    self._logger.warning("Could not verify decrypted request from {!r}".format(remote_ip))
+                    self._logger.warning("Could not verify decrypted request_str from {!r}".format(remote_ip))
                     raise EduIDAPIError("Failed verifying signature")
                 parsed = verified.claims
             except Exception:
-                self._logger.error("Failed decrypting/verifying request:\n{!r}\n-----\n".format(request), exc_info=True)
-                raise EduIDAPIError("Failed parsing request")
+                self._logger.error("Failed decrypting/verifying request_str:\n{!r}\n-----\n".format(request_str),
+                                   exc_info=True)
+                raise EduIDAPIError("Failed parsing request_str")
 
-        assert(isinstance(parsed, dict))
+        if not isinstance(parsed, dict):
+            raise EduIDAPIError('Parsed request_str is not a dict')
 
-        for req_field in ['version']:
+        if parsed.get('version') is not 1:
+            raise EduIDAPIError("Unknown or missing version: {!r}".format(parsed.get('version')))
+
+        if required is None:
+            required = []
+        for req_field in ['nonce'] + required:
             if req_field not in parsed:
-                raise EduIDAPIError("No {!r} in request".format(req_field))
+                raise EduIDAPIError("No {!r} in request_str".format(req_field))
 
-        if parsed['version'] is not 1:
-            # really handle missing version below
-            raise EduIDAPIError("Unknown request version: {!r}".format(parsed['version']))
-
-        if not name in self.signing_key.allowed_commands:
+        if name not in self.signing_key.allowed_commands:
             raise EduIDAPIError("Method {!r} not allowed with this key".format(name))
 
         self._parsed_req = parsed
-        #cherrypy.request.eduid_api_parsed_req = parsed
 
     def __repr__(self):
         return ('<{} @{:#x}>'.format(
@@ -272,7 +277,7 @@ class MakeRequest(object):
         ))
         if 'nonce' in self._claims:
             # there was a nonce in the request, verify it is also present in the response
-            if not 'nonce' in jwt.claims:
+            if 'nonce' not in jwt.claims:
                 self._logger.warning("Nonce was present in request, but not in response:\n{!r}".format(
                     jwt.claims
                 ))

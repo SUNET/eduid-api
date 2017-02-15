@@ -2,65 +2,24 @@
 
 from __future__ import absolute_import
 
-from flask import Blueprint, current_app, request, abort
+from flask import Blueprint, current_app, request
 
 import eduid_api
-from eduid_api.common import EduIDAPIError
-
+from eduid_api.decorators import MFAAPIParseAndVerify, MFAAPIResponse
+from eduid_api.aead_gen import AEADGenRequest
+from eduid_api.mfa_add import MFAAddRequest
+from eduid_api.mfa_auth import MFAAuthRequest
+from eduid_api.mfa_test import MFATestRequest
 
 __author__ = 'ft'
 
 eduid_api_views = Blueprint('eduid_api', __name__, url_prefix='')
 
 
-def _get_remote_ip():
-    if request.headers.getlist('X-Forwarded-For'):
-        return request.headers.getlist('X-Forwarded-For')[0]
-    return request.remote_addr
-
-
-def _parse_request(config, fun, name):
-    """
-    Generic request parser wrapper to handle errors during parsing in a uniform way.
-
-    :param fun: Function that will parse the request
-    :type fun: callable
-    :return: Parsed data
-    """
-    _remote_ip = _get_remote_ip()
-    current_app.logger.info("Parsing {!s} request from {!r}".format(name, _remote_ip))
-
-    try:
-        req = fun()
-        if not req.signing_key:
-            current_app.logger.info("Could not decrypt/authenticate request from {!r}".format(_remote_ip))
-            abort(403)
-        current_app.logger.debug("Parsed and authenticated {!s} request:\n{!r}".format(name, req))
-        return True, req
-    except EduIDAPIError as ex:
-        current_app.logger.info("Parsing {!s} failed: {!s}".format(name, ex.reason))
-        res = eduid_api.response.ErrorResponse(ex.reason)
-        return False, res.to_string(remote_ip = _remote_ip)
-
-
-def _execute(fun, name):
-    """
-    Generic request parser wrapper to handle errors during execution in a uniform way.
-
-    :param fun: Function that will execute a previously parsed request
-    :type fun: callable
-    :return: eduid_api.response.BaseResponse
-    """
-    try:
-        response = fun()
-        return eduid_api.response.BaseResponse(response)
-    except EduIDAPIError as ex:
-        current_app.logger.info("Executing {!s} failed: {!s}".format(name, ex.reason))
-        return eduid_api.response.ErrorResponse(ex.reason)
-
-
 @eduid_api_views.route('/mfa_add', methods=['POST'])
-def mfa_add():
+@MFAAPIParseAndVerify('mfa_add', MFAAddRequest)
+@MFAAPIResponse('mfa_add')
+def mfa_add(req):
     """
     Create a new MultiFactor Authentication token for someone.
 
@@ -95,37 +54,23 @@ def mfa_add():
     The 'nonce' has nothing to do with the token - it allows the API client to
     ensure that a response is in fact related to a specific request.
 
-    :param request: JSON formatted request
-    :type request: str
+    :param req: Instance of decrypted and parsed request
+    :type req: MFAAddRequest
+
+    :returns: Request and response
     """
-    _remote_ip = _get_remote_ip()
-    data = request.get_json()
-    if type(data) is not dict:
-        raise ValueError("request must be a dict")
-    _request = data.get('request')
-
-    current_app.logger.debug("Extra debug: mfa_add request:{!r}".format(data))
-
-    def mfa_add_request():
-        return eduid_api.mfa_add.MFAAddRequest(_request, _remote_ip, current_app.logger, current_app.config)
-
-    success, req = _parse_request(current_app.config, mfa_add_request, 'mfa_add')
-    if not success:
-        return req
-
-    def add_token():
-        return eduid_api.mfa_add.add_token(req,
-                                           current_app.state.authstore,
-                                           current_app.logger,
-                                           current_app.config,
-                                           )
-    response = _execute(add_token, 'mfa_add')
-
-    return response.to_string(remote_ip = _remote_ip)
+    res = eduid_api.mfa_add.add_token(req,
+                                      current_app.state.authstore,
+                                      current_app.logger,
+                                      current_app.config,
+                                      )
+    return req, res
 
 
 @eduid_api_views.route('/mfa_auth', methods=['POST'])
-def mfa_auth():
+@MFAAPIParseAndVerify('mfa_auth', MFAAuthRequest)
+@MFAAPIResponse('mfa_auth')
+def mfa_auth(req):
     """
     Authenticate with MFA (Multi Factor Authentication).
 
@@ -150,44 +95,28 @@ def mfa_auth():
             "status": "OK"
         }
 
+    :param req: Instance of decrypted and parsed request
+    :type req: MFAAuthRequest
 
-    :param request: JSON formatted request
-    :type request: str
+    :returns: Request and response
     """
-    _remote_ip = _get_remote_ip()
-    data = request.get_json()
-    if type(data) is not dict:
-        raise ValueError("request must be a dict")
-    _request = data.get('request')
-
-    # Parse request and handle any errors
-    def mfa_auth_request():
-        return eduid_api.mfa_auth.MFAAuthRequest(_request,
-                                                 _remote_ip,
-                                                 current_app.logger,
-                                                 current_app.config,
-                                                 )
-    success, req = _parse_request(current_app.config, mfa_auth_request, 'mfa_auth')
-    if not success:
-        return req
-
-    def authenticate():
-        return eduid_api.mfa_auth.authenticate(req,
-                                               current_app.mystate.authstore,
-                                               current_app.logger,
-                                               current_app.config,
-                                               )
-    response = _execute(authenticate, 'mfa_auth')
-
-    return response.to_string(remote_ip = _remote_ip)
+    res = eduid_api.mfa_auth.authenticate(req,
+                                          current_app.mystate.authstore,
+                                          current_app.logger,
+                                          current_app.config,
+                                          )
+    current_app.logger.debug('Authentication result: {!r}'.format(res))
+    return req, res
 
 
 @eduid_api_views.route('/mfa_test', methods=['POST'])
-def mfa_test():
+@MFAAPIParseAndVerify('mfa_test', MFATestRequest)
+@MFAAPIResponse('mfa_test')
+def mfa_test(req):
     """
     Test communication with the API.
 
-    Example request POSTed to /mfa_auth:
+    Example decrypted request POSTed to /mfa_test:
 
         {
             "version":    1,
@@ -198,38 +127,22 @@ def mfa_test():
 
         {
             "nonce": "18e4909c157f670169c7",
-            "status": "OK"
+            "mfa_test_status": "OK"
         }
 
 
-    :param request: JSON formatted request
-    :type request: str
+    :param req: Instance of decrypted and parsed request
+    :type req: eduid_api.mfa_test.MFATestRequest
+
+    :returns: Request and response
     """
-    _remote_ip = _get_remote_ip()
-    data = request.form
-    current_app.logger.debug('TEST2: {!r}'.format(data))
-    _request = data.get('request')
-
-    # Parse request and handle any errors
-    def mfa_test_request():
-        return eduid_api.mfa_test.MFATestRequest(_request,
-                                                 _remote_ip,
-                                                 current_app.logger,
-                                                 )
-    success, req = _parse_request(current_app.config, mfa_test_request, 'mfa_auth')
-    if not success:
-        return req
-
-    def do_test():
-        return eduid_api.mfa_test.test(req, current_app.logger)
-
-    response = _execute(do_test, 'mfa_auth')
-
-    return response.to_string(remote_ip = _remote_ip)
+    return req, eduid_api.mfa_test.test(req, current_app.logger)
 
 
 @eduid_api_views.route('/aead_gen', methods=['POST'])
-def aead_gen():
+@MFAAPIParseAndVerify('aead_gen', AEADGenRequest)
+@MFAAPIResponse('mfa_test')
+def aead_gen(req):
     """
     Create a new AEAD, probably for a new OATH token.
 
@@ -247,32 +160,16 @@ def aead_gen():
     OATH AEADs since the actual secret has to be provisioned into the user's token,
     but is optional in this API in case some future use case does not require it.
 
-    :param request: JSON formatted request
-    :type request: str
+    :param req: Instance of decrypted and parsed request
+    :type req: AEADGenRequest
+
+    :returns: Request and response
     """
-    _remote_ip = _get_remote_ip()
-    data = request.get_json()
-    if type(data) is not dict:
-        raise ValueError("request must be a dict")
-    _request = data.get('request')
-
-    # Parse request and handle any errors
-    def aead_gen_request():
-        return eduid_api.aead_gen.AEADGenRequest(_request,
-                                                 _remote_ip,
-                                                 current_app.logger,
-                                                 current_app.config)
-    success, req = _parse_request(current_app.config, aead_gen_request, 'aead_gen')
-    if not success:
-        return req
-
-    def aead_gen_action():
-        return eduid_api.aead_gen.AEADGenAction(req,
-                                                current_app.logger,
-                                                current_app.config).response()
-    response = _execute(aead_gen_action, 'aead_gen')
-
-    return response.to_string(remote_ip = _remote_ip)
+    res = eduid_api.aead_gen.make_aead(req,
+                                       current_app.logger,
+                                       current_app.config,
+                                       )
+    return req, res
 
 
 @eduid_api_views.route('/ping', methods=['GET', 'POST'])

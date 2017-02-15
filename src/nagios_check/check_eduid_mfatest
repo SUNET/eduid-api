@@ -154,7 +154,7 @@ def mfa_test(keys, args, logger):
               }
     response = send_claims(claims, args.test_url, keys, args, logger)
     logger.debug('Test got response: {!s}'.format(response))
-    if type(response) == dict and response.get('status') == 'OK':
+    if type(response) == dict and response.get('mfa_test_status') == 'OK':
         print('OK response received')
         return True
     print ('NOT OK: {!s}'.format(response))

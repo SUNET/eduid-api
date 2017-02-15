@@ -57,41 +57,6 @@ class MFATestRequest(BaseRequest):
     def __init__(self, request, remote_ip, logger):
         BaseRequest.__init__(self, request, remote_ip, 'mfa_auth')
 
-        for req_field in ['nonce', 'version']:
-            if req_field not in self._parsed_req:
-                raise EduIDAPIError('No {!r} in request'.format(req_field))
-
-        ver = self._parsed_req['version']
-        if int(ver) != 1:
-            raise EduIDAPIError('Unknown version in request: {!r}'.format(ver))
-
-
-class TestAction(object):
-    """
-    Perform light self-test.
-
-    :param request: Request object
-
-    :type request: MFAAuthRequest
-    :type logger: logging.logger
-    """
-    def __init__(self, request, logger):
-        self._request = request
-        self._logger = logger
-        self._status = 'OK'
-
-    def response(self):
-        """
-        Create a response dict to be returned (JSON formatted) to the API client.
-
-        :return: Response
-        :rtype: dict
-        """
-        res = {'mfa_test_status': self._status}
-        self._logger.debug('Creating {!r} response for {!r}'.format(self._status, self._request))
-        res['nonce'] = self._request.nonce  # Copy nonce (request id) from request to response
-        return res
-
 
 def test(req, logger):
     """
@@ -100,10 +65,16 @@ def test(req, logger):
     :param req: The parsed test-request
     :param logger: Logger
 
-    :type req: MFAAuthRequest
+    :type req: MFATestRequest
     :type logger: logging.logger
 
     :return: Resppnse dict
     :rtype: dict
     """
-    return TestAction(req, logger).response()
+    if not isinstance(req, MFATestRequest):
+        logger.error('Wrong type: {!r}'.format(req))
+    res = {'mfa_test_status': 'OK',
+           'nonce': req.nonce,  # Copy nonce (request id) from request to response
+           }
+    logger.debug('Created {!r} response for {!r}'.format(res['mfa_test_status'], req))
+    return res
