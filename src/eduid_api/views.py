@@ -57,14 +57,16 @@ def mfa_add(req):
     :param req: Instance of decrypted and parsed request
     :type req: MFAAddRequest
 
-    :returns: Request and response
+    :returns: Response
+    :rtype: dict
     """
     res = eduid_api.mfa_add.add_token(req,
-                                      current_app.state.authstore,
+                                      current_app.mystate.authstore,
                                       current_app.logger,
+                                      current_app.mystate,
                                       current_app.config,
                                       )
-    return req, res
+    return res
 
 
 @eduid_api_views.route('/mfa_auth', methods=['POST'])
@@ -98,7 +100,8 @@ def mfa_auth(req):
     :param req: Instance of decrypted and parsed request
     :type req: MFAAuthRequest
 
-    :returns: Request and response
+    :returns: Response
+    :rtype: dict
     """
     res = eduid_api.mfa_auth.authenticate(req,
                                           current_app.mystate.authstore,
@@ -106,7 +109,7 @@ def mfa_auth(req):
                                           current_app.config,
                                           )
     current_app.logger.debug('Authentication result: {!r}'.format(res))
-    return req, res
+    return res
 
 
 @eduid_api_views.route('/mfa_test', methods=['POST'])
@@ -134,9 +137,10 @@ def mfa_test(req):
     :param req: Instance of decrypted and parsed request
     :type req: eduid_api.mfa_test.MFATestRequest
 
-    :returns: Request and response
+    :returns: Response
+    :rtype: dict
     """
-    return req, eduid_api.mfa_test.test(req, current_app.logger)
+    return eduid_api.mfa_test.test(req, current_app.logger)
 
 
 @eduid_api_views.route('/aead_gen', methods=['POST'])
@@ -163,15 +167,16 @@ def aead_gen(req):
     :param req: Instance of decrypted and parsed request
     :type req: AEADGenRequest
 
-    :returns: Request and response
+    :returns: Response
+    :rtype: dict
     """
     res = eduid_api.aead_gen.make_aead(req,
                                        current_app.logger,
                                        current_app.config,
                                        )
-    return req, res
+    return res
 
 
 @eduid_api_views.route('/ping', methods=['GET', 'POST'])
 def ping():
-    return 'pong'
+    return 'pong\n'

@@ -43,52 +43,43 @@ import pprint
 import unittest
 import pkg_resources
 
-import cherrypy
-import cptestcase
 import simplejson as json
 
-import eduid_api
-from eduid_api.run import APIBackend
-from eduid_api.keystore import APIKey
+from eduid_common.api.testing import EduidAPITestCase
+from eduid_api.app import init_eduid_api_app
+
+from werkzeug.exceptions import NotFound
 
 
-class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
+class AppTests(EduidAPITestCase):
+    """Base TestCase for those tests that need a full environment setup"""
 
     def setUp(self):
-        debug = True
         self.datadir = pkg_resources.resource_filename(__name__, 'data')
-        self.config_file = os.path.join(self.datadir, 'test_config.ini')
-        self.config = eduid_api.config.EduIDAPIConfig(self.config_file, debug)
-        self.logger = eduid_api.log.EduIDAPILogger('test_apibackend', self.config)
-        try:
-            self.db = eduid_api.db.EduIDAPIDB(self.config.mongodb_uri)
-            self.authstore = eduid_api.authstore.APIAuthStoreMongoDB(self.config.mongodb_uri, self.logger)
-        except Exception:
-            # will skip tests that require mongodb
-            self.db = None
-            self.authstore = None
+        super(AppTests, self).setUp(create_user=False)
+        self.client = self.app.test_client()
 
-        # load example certificate and key
-        _keystore_data = {"self": {"JWK": {"file": os.path.join(self.datadir, 'example.pem')},
-                                   "ip_addresses": ["127.0.0.1",
-                                                    ],
-                                   "allowed_commands": ["mfa_add"],
-                                   "owner": "example.org"
-        },
+    def load_app(self, config):
+        """
+        Called from the parent class, so we can provide the appropriate flask
+        app for this test case.
+        """
+        return init_eduid_api_app('testing', config)
 
-                          "_private": {"JWK": {"file": os.path.join(self.datadir, 'example.key')},
-                                       "ip_addresses": []
-                          }
-        }
-        self.config.keys._keys = [APIKey(name, value) for (name, value) in _keystore_data.items()]
-
-        self.apibackend = APIBackend(self.logger, self.db, self.authstore, self.config, expose_real_errors=True)
-
-        cherrypy.tree.mount(self.apibackend, '/')
-        cherrypy.engine.start()
+    def update_config(self, config):
+        config.update({
+            'KEYSTORE_FN': os.path.join(self.datadir, 'test_keystore.json'),
+            })
+        return config
 
     def tearDown(self):
-        cherrypy.engine.exit()
+        super(AppTests, self).tearDown()
+
+    def request(self, url, request):
+        return self.client.post(url,
+                                data = {'request': request},
+                                environ_base = {'REMOTE_ADDR': '127.0.0.1'},
+                                )
 
     def _sign_and_encrypt(self, claims, priv_jwk, server_jwk, alg = 'RS256'):
         jws = jose.sign(claims, priv_jwk, alg=alg)
@@ -112,70 +103,8 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
         """
         #raise unittest.SkipTest("test disabled because add_raw has been removed")
 
-        response = self.request('/', return_error=True)
-        self.assertEqual(response.output_status, '500 Internal Server Error')
-        self.assertIn('404 Not Found', response.body[0])
-
-    def test_add_raw_request_wrong_version(self):
-        """
-        Verify add_raw request with wrong version is rejected
-        """
-        raise unittest.SkipTest("test disabled because add_raw has been removed")
-
-        a = {'add_raw': {},
-             'version': 9999,
-             }
-        j = json.dumps(a)
-        response = self.request('/add_raw', request=j, return_error=True)
-        self.assertIn('Unknown request version : 9999', response.body[0])
-
-        # try again with blinding
-        self.apibackend.expose_real_errors = False
-        response = self.request('/add_raw', request=j, return_error=True)
-        self.assertEqual(response.output_status, '500 Internal Server Error')
-
-    def test_add_raw_missing_data(self):
-        """
-        Verify add_raw request with missing data is rejected
-        """
-        raise unittest.SkipTest("test disabled because add_raw has been removed")
-
-        for req_field in ['data']:
-            a = {'add_raw': {'foo': 'bar'},
-                 'version': 1,
-                 }
-            if req_field in a['add_raw']:
-                del a['add_raw'][req_field]
-            j = json.dumps(a)
-            response = self.request('/add_raw', request=j, return_error=True)
-            self.assertIn("No '{!s}' in request".format(req_field), response.body[0])
-
-    def test_add_raw_request1(self):
-        """
-        Verify correct add_raw request
-        """
-        if self.db is None:
-            raise unittest.SkipTest("requires accessible MongoDB server on {!s}".format(
-                    self.config.mongodb_uri))
-
-        raise unittest.SkipTest("test disabled because AMQP server can't be mocked at this time")
-
-        a = {'add_raw':
-                 {'data': {'email': 'ft@example.net',
-                           'verified': True,
-                           },
-                  },
-             'version': 1,
-             }
-        j = json.dumps(a)
-        response = self.request('/add_raw', request=j, return_error=True)
-        res = json.loads(response.body[0])
-        expected = {'add_raw':
-                        {'version': 1,
-                         'success': True,
-                         }
-                    }
-        self.assertEqual(res, expected)
+        with self.assertRaises(NotFound):
+            self.client.get('/')
 
     def test_mfa_add_request(self):
         """
@@ -192,22 +121,22 @@ class TestAuthBackend(cptestcase.BaseCherryPyTestCase):
                            'account': 'user@example.org',
                            }
                   }
-        priv_jwk = self.config.keys.private_key.jwk
-        server_jwk = self.config.keys.lookup_by_name("self").jwk
+        priv_jwk = self.app.mystate.keys.private_key.jwk
+        server_jwk = self.app.mystate.keys.lookup_by_name('self').jwk
         jwe = self._sign_and_encrypt(claims, priv_jwk, server_jwk)
         serialized = jose.serialize_compact(jwe)
 
-        response = self.request('/mfa_add', request=serialized, return_error=True)
+        response = self.request('/mfa_add', serialized)
 
-        jwt = self._decrypt_and_verify(response.body[0], priv_jwk, server_jwk)
+        jwt = self._decrypt_and_verify(response.data, priv_jwk, server_jwk)
 
         response_claims = jwt.claims
 
-        self.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
 
         self.assertEqual(response_claims,
                          {u'nonce': nonce.encode('hex'),
-                          u'reason': u'No API Key found for OATH AEAD service',
+                          u'reason': u'No local YubiHSM, and no OATH_AEAD_GEN_URL configured',
                           u'status': u'FAIL',
                           u'version': 1,
                           })

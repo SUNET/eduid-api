@@ -40,7 +40,7 @@ import vccs_client
 import eduid_api.authuser
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
-from eduid_api.aead import OATHAEAD
+from eduid_api.aead import OATHAEAD_Remote, OATHAEAD_YHSM
 
 import qrcode
 import qrcode.image.svg
@@ -71,15 +71,13 @@ class MFAAddRequest(BaseRequest):
 
     :param request: JSON formatted request
     :param logger: logging object
-    :param config: config object
     :type request: str
     :type logger: logging.logger
-    :type config: eduid_api.config.EduIDAPIConfig
 
     :type token: AddOATHTokenRequest | AddU2FTokenRequest
     """
-    def __init__(self, request, remote_ip, logger, config):
-        BaseRequest.__init__(self, request, remote_ip, 'mfa_add', logger, config)
+    def __init__(self, request, remote_ip, logger):
+        BaseRequest.__init__(self, request, remote_ip, 'mfa_add')
 
         for req_field in ['nonce', 'token_type', 'version']:
             if req_field not in self._parsed_req:
@@ -259,29 +257,30 @@ class AddTokenAction(object):
     :param request: Request object
     :param authstore: Credential store
     :param logger: logging object
-    :param config: config object
+    :param state: Configuration
 
     :type request: MFAAddRequest
     :type authstore: eduid_api.authstore.APIAuthStore
     :type logger: logging.logger
-    :type config: eduid_api.config.EduIDAPIConfig
+    :type state: eduid_api.app.MyState
 
     :type aead: OATHAEAD
     :type _user: eduid_api.authuser.APIAuthUser
     :type _token_id: bson.ObjectId
     :type _authstore: eduid_api.authstore.APIAuthStore
     """
-    def __init__(self, request, authstore, logger, config):
+    def __init__(self, request, authstore, logger, state, config):
         self._request = request
         self._authstore = authstore
         self._logger = logger
-        self._config = config
+        self._state = state
         self.aead = None
         self._user_id = str(bson.ObjectId())  # unique id for new user  XXX randomize
         self._token_id = str(bson.ObjectId())  # unique id for new token  XXX randomize
         self._status = None
         self._factor = None
         self._user = None
+        self._config = config
 
     def add_to_authbackend(self):
         """
@@ -305,7 +304,7 @@ class AddTokenAction(object):
                 )
         else:
             raise NotImplemented()
-        client = vccs_client.VCCSClient(base_url=self._config.vccs_base_url)
+        client = vccs_client.VCCSClient(base_url=self._state.vccs_base_url)
         self._logger.debug("Extra debug: Adding credential {!r}".format(self._factor.credential_id))
         client.add_credentials(str(self._user_id), [self._factor])
         self._status = True
@@ -364,26 +363,32 @@ class AddTokenAction(object):
     def _get_oath_aead(self):
         """
         """
-        self.aead = OATHAEAD(self._logger, self._config)
+        if self._state.yhsm:
+            self.aead = OATHAEAD_YHSM(self._logger, self._state)
+        else:
+            url = self._config['OATH_AEAD_GEN_URL']
+            if not url:
+                raise EduIDAPIError('No local YubiHSM, and no OATH_AEAD_GEN_URL configured')
+            self.aead = OATHAEAD_Remote(self._logger, url, self._state.keys)
 
 
-def add_token(req, authstore, logger, config):
+def add_token(req, authstore, logger, state, config):
     """
     Add a new token to the API auth system.
 
     :param req: The parsed add-request
     :param authstore: AuthUsers database
     :param logger: Logger
-    :param config: Configuration
+    :param state: Configuration
 
     :type req: MFAAddRequest
     :type authstore: eduid_api.authstore.APIAuthStore
     :type logger: logging.logger
-    :type config: eduid_api.config.EduIDAPIConfig
+    :type state: eduid_api.config.EduIDAPIConfig
     :return: Resppnse dict
     :rtype: dict
     """
-    action = AddTokenAction(req, authstore, logger, config)
+    action = AddTokenAction(req, authstore, logger, state, config)
     action.add_to_authbackend()
     action.add_to_authstore()
     return action.response()

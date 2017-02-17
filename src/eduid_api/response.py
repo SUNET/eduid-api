@@ -50,7 +50,7 @@ class BaseResponse(object):
         self._data = data
         self._logger = current_app.logger
         self._request = request
-        if 'nonce' not in self._data
+        if 'nonce' not in self._data:
             self._data['nonce'] = request.nonce  # Copy nonce (request id) from request to response
         assert self._data, dict
         return

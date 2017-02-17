@@ -51,6 +51,7 @@ Example keystore:
 The eduID API service's private key need to be provided in the special "_private" entry.
 """
 
+import os
 import simplejson
 
 from eduid_api.common import EduIDAPIError
@@ -76,7 +77,14 @@ class KeyStore(object):
         except Exception as ex:
             raise EduIDAPIError("Failed loading config file {!r}: {!r}".format(keystore_fn, ex))
 
-        self._keys = [APIKey(name, value) for (name, value) in data.items()]
+        self._keys = [APIKey(name, value, path=os.path.dirname(keystore_fn)) for (name, value) in data.items()]
+
+    def __format__(self, *args, **kwargs):
+        _has_private = self.private_key is not None
+        return '<eduID {!s}: {!s} key(s), private: {!s}>'.format(self.__class__.__name__,
+                                                                 self.count,
+                                                                 _has_private,
+                                                )
 
     def lookup_by_ip(self, ip):
         """
@@ -129,20 +137,27 @@ class KeyStore(object):
                 break
         return res
 
+    @property
+    def count(self):
+        """
+        :return: Return number of keys in keystore.
+        """
+        return len(self._keys)
+
 
 class APIKey(object):
     """
     API key entrys contain sign/encrypt credentials and authorization information.
     """
-    def __init__(self, name, data):
+    def __init__(self, name, data, path=None):
         self._name = name
         self._data = data
         self._key = None
+        self._path = path
 
-    def __repr__(self):
-        return '<{cl} instance at {addr}: {name!r}, type={keytype!r}>'.format(
+    def __format__(self, *args, **kwargs):
+        return '<eduID {cl}: {name!r}, type={keytype!r}>'.format(
             cl = self.__class__.__name__,
-            addr = hex(id(self)),
             name = self._name,
             keytype = self.keytype,
         )
@@ -228,6 +243,8 @@ class APIKey(object):
                 #    ...
                 # then load the private key from the path supplied.
                 _keyfile = self._data.get('JWK')['file']
+                if not os.path.isabs(_keyfile) and self._path:
+                    _keyfile = os.path.join(self._path, _keyfile)
                 try:
                     fd = open(_keyfile)
                     self._key = dict(k = fd.read())
@@ -236,7 +253,7 @@ class APIKey(object):
             else:
                 self._key = self._data.get('JWK')
             if not 'k' in self._key:
-                EduIDAPIError("Bad JWK for key {!r}: {!r}".format(self, self._key))
+                EduIDAPIError("Bad JWK for key {}: {!r}".format(self, self._key))
         return self._key
 
     @property

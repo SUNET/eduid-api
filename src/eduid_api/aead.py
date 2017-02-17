@@ -48,43 +48,9 @@ class OATHAEAD(object):
     give us a reference. Instead, we have to ask an OATH AEAD generating service to
     generate the OATH AEAD that will later on be usable for authenticating the user,
     but also give us the actual HMAC key.
-
-    :param logger: logging object
-    :param config: config object
-
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
     """
-    def __init__(self, logger, config):
-        self._logger = logger
-        self._config = config
-
-        if config.yhsm:
-            _aead = YHSM_OATHAEAD(logger, config)
-            self._data = _aead.to_dict(plaintext=True)
-            return
-
-        # No local YubiHSM - access one remotely from another instance of this
-        # API and it's function aead_gen.
-
-        claims = {'version': 1,
-                  'nonce': os.urandom(8).encode('hex'),  # Not AEAD nonce, just 'verify response' nonce
-                  'length': 20,                          # OATH is HMAC-SHA1 == 160 bits == 20 bytes
-                  'plaintext': True,                     # Need the plaintext to share with the user
-                  }
-        url = self._config.oath_aead_gen_url
-        req = eduid_api.request.MakeRequest(claims, self._logger, self._config)
-        api_key = self._config.keys.lookup_by_url(url)
-        if not api_key:
-            self._logger.error("No API Key found for URL {!r}".format(url))
-            raise EduIDAPIError("No API Key found for OATH AEAD service")
-        req.send_request(url, 'request', api_key[0])
-        data = req.decrypt_response()
-        self._logger.debug("Got response: {!r}".format(data))
-        if data['status'] != 'OK':
-            self._logger.error("OATH AEAD generation failed: {!r}".format(data.get('reason')))
-            raise EduIDAPIError("OATH AEAD generation failed")
-        self._data = data['aead']
+    def __init__(self):
+        self._data = {}
 
     @property
     def secret(self):
@@ -119,9 +85,9 @@ class OATHAEAD(object):
         return self._data['nonce']
 
 
-class YHSM_OATHAEAD(object):
+class OATHAEAD_YHSM(OATHAEAD):
     """
-    Contact AEAD generation service and generate a new AEAD for an OATH credential.
+    Generate an AEAD using a local YubiHSM.
 
     :param logger: logging object
     :param config: config object
@@ -129,8 +95,9 @@ class YHSM_OATHAEAD(object):
     :type logger: eduid_api.log.EduIDAPILogger
     :type config: eduid_api.config.EduIDAPIConfig
     """
-    def __init__(self, logger, config, num_bytes = 20):
-        self.keyhandle = config.oath_aead_keyhandle
+    def __init__(self, logger, state, num_bytes = 20):
+        super(OATHAEAD, self).__init__(self)
+        self.keyhandle = state.oath_aead_keyhandle
         self._logger = logger
         if not self.keyhandle:
             raise EduIDAPIError('No OATH AEAD keyhandle configured')
@@ -138,30 +105,51 @@ class YHSM_OATHAEAD(object):
         self._logger.debug("Generating {!r} bytes AEAD using key_handle 0x{:x}".format(num_bytes, self.keyhandle))
 
         from_os = os.urandom(num_bytes).encode('hex')
-        from_hsm = config.yhsm.random(num_bytes)
+        from_hsm = state.yhsm.random(num_bytes)
         # XOR together num_bytes from the YubiHSM's RNG with nu_bytes from /dev/urandom.
         xored = ''.join([chr(ord(a) ^ ord(b)) for (a, b) in zip(from_hsm, from_os)])
-        self.secret = xored
         # Make the key inside the AEAD only usable with the YubiHSM YSM_HMAC_SHA1_GENERATE function
         # Enabled flags 00010000 = YSM_HMAC_SHA1_GENERATE
         flags = '\x00\x00\x01\x00'  # struct.pack("< I", 0x10000)
-        aead = config.yhsm.generate_aead_simple(chr(0x0), self.keyhandle, self.secret + flags)
-        self.aead = aead.data.encode('hex')
-        self.nonce = aead.nonce.encode('hex')
+        aead = state.yhsm.generate_aead_simple(chr(0x0), self.keyhandle, self.secret + flags)
 
-    def to_dict(self, plaintext=False):
-        """
-        Serialize generated AEAD into a dict.
+        self._data = {'data': aead.data.encode('hex'),
+                      'nonce': aead.nonce.encode('hex'),
+                      'key_handle': self.keyhandle,
+                      'secret': xored,
+                      }
 
-        :param plaintext: Add the plaintext secret into the result.
 
-        :return: Generated AEAD as dict
-        :rtype: dict
-        """
-        res = {'data': self.aead,
-               'nonce': self.nonce,
-               'key_handle': self.keyhandle,
-               }
-        if plaintext:
-            res['secret'] = self.secret.encode('hex')
-        return res
+class OATHAEAD_Remote(OATHAEAD):
+    """
+    Generate an AEAD using a remote AEAD generation service.
+
+    :param logger: logging object
+    :param config: config object
+
+    :type logger: eduid_api.log.EduIDAPILogger
+    :type config: eduid_api.config.EduIDAPIConfig
+    """
+    def __init__(self, logger, url, keys):
+        super(OATHAEAD, self).__init__()
+
+        # No local YubiHSM - access one remotely from another instance of this
+        # API and it's function aead_gen.
+
+        claims = {'version': 1,
+                  'nonce': os.urandom(8).encode('hex'),  # Not AEAD nonce, just 'verify response' nonce
+                  'length': 20,                          # OATH is HMAC-SHA1 == 160 bits == 20 bytes
+                  'plaintext': True,                     # Need the plaintext to share with the user
+                  }
+        req = eduid_api.request.MakeRequest(claims)
+        api_key = keys.lookup_by_url(url)
+        if not api_key:
+            logger.error("No API Key found for URL {!r}".format(url))
+            raise EduIDAPIError("No API Key found for OATH AEAD service")
+        req.send_request(url, 'request', api_key[0])
+        data = req.decrypt_response()
+        logger.debug("Got response: {!r}".format(data))
+        if data['status'] != 'OK':
+            logger.error("OATH AEAD generation failed: {!r}".format(data.get('reason')))
+            raise EduIDAPIError("OATH AEAD generation failed")
+        self._data = data['aead']

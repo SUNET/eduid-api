@@ -127,15 +127,15 @@ class BaseRequest(object):
             self._logger.error("No asymmetric private key (named '_private') found in the keystore")
             return False
 
-        self._logger.debug("Trying to decrypt request with key {!r}".format(decr_key))
+        self._logger.debug("Trying to decrypt request with key {}".format(decr_key))
         try:
             decrypted = jose.decrypt(jwe, decr_key.jwk, expiry_seconds = decr_key.expiry_seconds)
             self._logger.debug("Decrypted {!r}".format(decrypted))
 
         except jose.Expired as ex:
-            self._logger.warning("Request encrypted with key {!r} has expired: {!r}".format(decr_key, ex))
+            self._logger.warning("Request encrypted with key {} has expired: {!r}".format(decr_key, ex))
         except jose.Error as ex:
-            self._logger.warning("Failed decrypt with key {!r}: {!r}".format(decr_key, ex))
+            self._logger.warning("Failed decrypt with key {}: {!r}".format(decr_key, ex))
             raise EduIDAPIError('Could not decrypt request')
 
         if 'v1' not in decrypted.claims:
@@ -165,11 +165,11 @@ class BaseRequest(object):
         # Now, check for a valid signature
         for key in keys:
             if not key.keytype == 'jose':
-                self._logger.debug("Ignoring key {!r}".format(key))
+                self._logger.debug("Ignoring key {}".format(key))
                 continue
             try:
                 jwt = jose.verify(decrypted, key.jwk, alg = current_app.config['JOSE_ALG'])
-                self._logger.debug("Good signature on request from {!r} using key {!r}: {!r}".format(
+                self._logger.debug("Good signature on request from {!r} using key {}:\n{!r}".format(
                     remote_ip, key, jwt
                 ))
                 self._signing_key = key
@@ -178,10 +178,10 @@ class BaseRequest(object):
                 self._logger.debug("Ignoring key unusable with this algorithm: {!r}".format(key))
                 pass
             except jose.Error as ex:
-                self._logger.debug("Tried verifying signature using key {!r}: {!r}".format(key, ex))
+                self._logger.debug("Tried verifying signature using key {}: {!r}".format(key, ex))
                 pass
 
-        self._logger.warning("Failed verifying signature on request from {!r} using keys {!r}".format(
+        self._logger.warning("Failed verifying signature on request from {!r} using keys {}".format(
             remote_ip, keys
         ))
         return False

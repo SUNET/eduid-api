@@ -34,10 +34,13 @@
 #
 
 from functools import wraps
-from flask import current_app, request, abort
+from flask import current_app, request, abort, g
 
 import eduid_api
 from eduid_api.common import EduIDAPIError
+
+# Key to store request instance for use in the response-decorator
+_REQ_ATTR = 'eduid_mfaapi_attr'
 
 
 def _get_remote_ip():
@@ -75,6 +78,9 @@ class MFAAPIParseAndVerify(object):
                 data = request.form
                 if 'request' in data:
                     req = self.req_class(data['request'], _remote_ip, current_app.logger)
+                    # Store the request in the request context (flask.g) so that we can use it
+                    # to encrypt responses in MFAAPIResponse below
+                    setattr(g, _REQ_ATTR, req)
                     if not req.signing_key:
                         current_app.logger.info("Could not decrypt/authenticate request from {!r}".format(_remote_ip))
                         abort(403)
@@ -101,9 +107,11 @@ class MFAAPIResponse(object):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             try:
-                req, response = f(*args, **kwargs)
+                response = f(*args, **kwargs)
+                req = g.getattr(_REQ_ATTR)
                 return eduid_api.response.BaseResponse(response, req).to_string()
             except EduIDAPIError as ex:
                 current_app.logger.info("Executing {!s} failed: {!s}".format(self.name, ex.reason))
+                req = g.get(_REQ_ATTR)
                 return eduid_api.response.ErrorResponse(ex.reason, req).to_string()
         return decorated_function

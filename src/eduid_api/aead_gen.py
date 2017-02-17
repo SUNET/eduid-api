@@ -34,7 +34,7 @@
 
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
-from eduid_api.aead import YHSM_OATHAEAD
+from eduid_api.aead import OATHAEAD_YHSM
 
 
 class AEADGenRequest(BaseRequest):
@@ -110,7 +110,7 @@ class AEADGenAction(object):
         self._config = config
         self._status = False
 
-        self.aead = YHSM_OATHAEAD(logger, config, num_bytes = self._request.length)
+        self.aead = OATHAEAD_YHSM(logger, config, num_bytes = self._request.length)
         self._status = True
 
     def response(self):
@@ -135,7 +135,7 @@ class AEADGenAction(object):
 
 
 def make_aead(req, logger, config):
-    aead = YHSM_OATHAEAD(logger, config, num_bytes = req.length)
+    aead = OATHAEAD_YHSM(logger, config, num_bytes = req.length)
     res = {'status': 'OK',
            'aead': {'data': aead.aead,
                     'nonce': aead.nonce,

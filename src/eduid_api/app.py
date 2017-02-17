@@ -55,10 +55,10 @@ class MyState(object):
         tmp_add_raw_allow = str(app.config['ADD_RAW_ALLOW']) # for pylint
         self._parsed_add_raw_allow = \
             [x.strip() for x in tmp_add_raw_allow.split(',')]
-        self.keys = eduid_api.keystore.KeyStore(app.config['KEYSTORE_FN'])
-        self.keys = eduid_api.keystore.KeyStore(app.config['KEYSTORE_FN'])
 
-        app.logger.info("Loaded keys from {!r}: {!r}".format(app.config['KEYSTORE_FN'], self.keys))
+        self.keys = eduid_api.keystore.KeyStore(app.config['KEYSTORE_FN'])
+        app.logger.info("Loaded key(s) from {!r}: {}".format(app.config['KEYSTORE_FN'], self.keys))
+
         self._parsed_oath_aead_keyhandle = None
         self.yhsm = None
         kh_str = app.config['OATH_AEAD_KEYHANDLE']
