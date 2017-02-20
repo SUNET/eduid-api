@@ -48,7 +48,7 @@ import simplejson as json
 from eduid_common.api.testing import EduidAPITestCase
 from eduid_api.app import init_eduid_api_app
 
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import NotFound, Unauthorized, BadRequest
 
 
 class AppTests(EduidAPITestCase):
@@ -75,10 +75,13 @@ class AppTests(EduidAPITestCase):
     def tearDown(self):
         super(AppTests, self).tearDown()
 
-    def request(self, url, request):
+    def request(self, url, request, remote_addr='127.0.0.1'):
+        data = {}
+        if request:
+            data['request'] = request
         return self.client.post(url,
-                                data = {'request': request},
-                                environ_base = {'REMOTE_ADDR': '127.0.0.1'},
+                                data = data,
+                                environ_base = {'REMOTE_ADDR': remote_addr},
                                 )
 
     def _sign_and_encrypt(self, claims, priv_jwk, server_jwk, alg = 'RS256'):
@@ -86,7 +89,6 @@ class AppTests(EduidAPITestCase):
         signed_claims = {'v1': jose.serialize_compact(jws)}
         jwe = jose.encrypt(signed_claims, server_jwk)
         return jwe
-
 
     def _decrypt_and_verify(self, plaintext, decr_key, signing_key, alg = 'RS256'):
         jwe = jose.deserialize_compact(plaintext.replace("\n", ''))
@@ -101,10 +103,33 @@ class AppTests(EduidAPITestCase):
         """
         Verify bad requests are rejected
         """
-        #raise unittest.SkipTest("test disabled because add_raw has been removed")
-
         with self.assertRaises(NotFound):
             self.client.get('/')
+
+    def test_unknown_client(self):
+        """
+        Test handling of unknown client.
+        """
+        claims = {}
+        priv_jwk = self.app.mystate.keys.private_key.jwk
+        server_jwk = self.app.mystate.keys.lookup_by_name('self').jwk
+        jwe = self._sign_and_encrypt(claims, priv_jwk, server_jwk)
+        serialized = jose.serialize_compact(jwe)
+        with self.assertRaises(BadRequest):
+            self.request('/mfa_add', serialized, remote_addr = '192.0.2.101')
+
+    def test_unknown_client_no_request(self):
+        """
+        Test handling of unknown client.
+        """
+        with self.assertRaises(Unauthorized):
+            self.request('/mfa_add', None, remote_addr = '192.0.2.101')
+
+    def test_ping(self):
+        """
+        Test the unprotected ping endpoint.
+        """
+        self.client.get('/ping') == ['pong']
 
     def test_mfa_add_request(self):
         """

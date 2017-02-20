@@ -78,18 +78,17 @@ class MFAAPIParseAndVerify(object):
                 data = request.form
                 if 'request' in data:
                     req = self.req_class(data['request'], _remote_ip, current_app.logger)
+                    current_app.logger.debug("Parsed and authenticated {!s} request:\n{!r}".format(self.name, req))
+
                     # Store the request in the request context (flask.g) so that we can use it
                     # to encrypt responses in MFAAPIResponse below
                     setattr(g, _REQ_ATTR, req)
-                    if not req.signing_key:
-                        current_app.logger.info("Could not decrypt/authenticate request from {!r}".format(_remote_ip))
-                        abort(403)
-                    current_app.logger.debug("Parsed and authenticated {!s} request:\n{!r}".format(self.name, req))
 
                     return f(req, *args, **kwargs)
                 abort(401)
             except EduIDAPIError as ex:
                 current_app.logger.info("Parsing {!s} failed: {!s}".format(self.name, ex.reason))
+                # Calling abort() here hides the real error from the client.
                 abort(400)
         return decorated_function
 
