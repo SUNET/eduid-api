@@ -33,7 +33,6 @@
 #
 
 from eduid_api.request import BaseRequest
-from eduid_api.common import EduIDAPIError
 
 
 class MFATestRequest(BaseRequest):
@@ -55,7 +54,7 @@ class MFATestRequest(BaseRequest):
     :type logger: eduid_api.log.EduIDAPILogger
     """
     def __init__(self, request, remote_ip, logger):
-        BaseRequest.__init__(self, request, remote_ip, 'mfa_auth')
+        BaseRequest.__init__(self, request, remote_ip, 'mfa_test')
 
 
 def test(req, logger):

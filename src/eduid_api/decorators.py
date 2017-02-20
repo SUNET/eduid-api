@@ -88,8 +88,11 @@ class MFAAPIParseAndVerify(object):
                 abort(401)
             except EduIDAPIError as ex:
                 current_app.logger.info("Parsing {!s} failed: {!s}".format(self.name, ex.reason))
-                # Calling abort() here hides the real error from the client.
-                abort(400)
+                if current_app.config.get('TESTING') is not True:
+                    # Calling abort() here hides the real error from the client.
+                    c = current_app.config
+                    abort(400)
+                raise
         return decorated_function
 
 
@@ -107,10 +110,10 @@ class MFAAPIResponse(object):
         def decorated_function(*args, **kwargs):
             try:
                 response = f(*args, **kwargs)
-                req = g.getattr(_REQ_ATTR)
+                req = getattr(g, _REQ_ATTR)
                 return eduid_api.response.BaseResponse(response, req).to_string()
             except EduIDAPIError as ex:
                 current_app.logger.info("Executing {!s} failed: {!s}".format(self.name, ex.reason))
-                req = g.get(_REQ_ATTR)
+                req = getattr(g, _REQ_ATTR)
                 return eduid_api.response.ErrorResponse(ex.reason, req).to_string()
         return decorated_function

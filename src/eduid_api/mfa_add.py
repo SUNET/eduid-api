@@ -41,6 +41,7 @@ import eduid_api.authuser
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
 from eduid_api.aead import OATHAEAD_Remote, OATHAEAD_YHSM
+import eduid_common.authn
 
 import qrcode
 import qrcode.image.svg
@@ -304,7 +305,7 @@ class AddTokenAction(object):
                 )
         else:
             raise NotImplemented()
-        client = vccs_client.VCCSClient(base_url=self._state.vccs_base_url)
+        client = eduid_common.authn.get_vccs_client(self._state.vccs_base_url)
         self._logger.debug("Extra debug: Adding credential {!r}".format(self._factor.credential_id))
         client.add_credentials(str(self._user_id), [self._factor])
         self._status = True

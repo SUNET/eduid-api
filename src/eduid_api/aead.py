@@ -96,7 +96,7 @@ class OATHAEAD_YHSM(OATHAEAD):
     :type config: eduid_api.config.EduIDAPIConfig
     """
     def __init__(self, logger, state, num_bytes = 20):
-        super(OATHAEAD, self).__init__(self)
+        super(OATHAEAD, self).__init__()
         self.keyhandle = state.oath_aead_keyhandle
         self._logger = logger
         if not self.keyhandle:
@@ -111,7 +111,7 @@ class OATHAEAD_YHSM(OATHAEAD):
         # Make the key inside the AEAD only usable with the YubiHSM YSM_HMAC_SHA1_GENERATE function
         # Enabled flags 00010000 = YSM_HMAC_SHA1_GENERATE
         flags = '\x00\x00\x01\x00'  # struct.pack("< I", 0x10000)
-        aead = state.yhsm.generate_aead_simple(chr(0x0), self.keyhandle, self.secret + flags)
+        aead = state.yhsm.generate_aead_simple(chr(0x0), self.keyhandle, xored + flags)
 
         self._data = {'data': aead.data.encode('hex'),
                       'nonce': aead.nonce.encode('hex'),

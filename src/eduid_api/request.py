@@ -99,7 +99,7 @@ class BaseRequest(object):
                 raise EduIDAPIError("No {!r} in request_str".format(req_field))
 
         if name not in self.signing_key.allowed_commands:
-            raise EduIDAPIError("Method {!r} not allowed with this key".format(name))
+            raise EduIDAPIError("Method {!r} not allowed with key {}".format(name, self.signing_key))
 
         self._parsed_req = parsed
 
