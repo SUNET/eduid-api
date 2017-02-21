@@ -145,7 +145,7 @@ def mfa_test(req):
 
 @eduid_api_views.route('/aead_gen', methods=['POST'])
 @MFAAPIParseAndVerify('aead_gen', AEADGenRequest)
-@MFAAPIResponse('mfa_test')
+@MFAAPIResponse('aead_gen')
 def aead_gen(req):
     """
     Create a new AEAD, probably for a new OATH token.
@@ -172,7 +172,7 @@ def aead_gen(req):
     """
     res = eduid_api.aead_gen.make_aead(req,
                                        current_app.logger,
-                                       current_app.config,
+                                       current_app.mystate,
                                        )
     return res
 

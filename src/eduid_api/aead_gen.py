@@ -33,7 +33,6 @@
 #
 
 from eduid_api.request import BaseRequest
-from eduid_api.common import EduIDAPIError
 from eduid_api.aead import OATHAEAD_YHSM
 
 
@@ -58,20 +57,12 @@ class AEADGenRequest(BaseRequest):
 
     :param request: JSON formatted request
     :param logger: logging object
-    :param config: config object
     :type request: str
     :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
     """
-    def __init__(self, request, remote_ip, logger, config):
-        BaseRequest.__init__(self, request, remote_ip, 'aead_gen', logger, config)
-
-        for req_field in ['length', 'version']:
-            if req_field not in self._parsed_req:
-                raise EduIDAPIError("No {!r} in request".format(req_field))
-
-        if int(self._parsed_req['version']) != 1:
-            raise EduIDAPIError("Unknown version in request".format(req_field))
+    def __init__(self, request, remote_ip, logger):
+        BaseRequest.__init__(self, request, remote_ip, 'aead_gen',
+                             required = ['length'])
 
     @property
     def length(self):
@@ -90,48 +81,6 @@ class AEADGenRequest(BaseRequest):
         :rtype: bool
         """
         return bool(self._parsed_req.get('plaintext', False))
-
-
-class AEADGenAction(object):
-    """
-    Generate a new AEAD using a YubiHSM.
-
-    :param request: Request object
-    :param logger: logging object
-    :param config: config object
-
-    :type request: AEADGenRequest
-    :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
-    """
-    def __init__(self, request, logger, config):
-        self._request = request
-        self._logger = logger
-        self._config = config
-        self._status = False
-
-        self.aead = OATHAEAD_YHSM(logger, config, num_bytes = self._request.length)
-        self._status = True
-
-    def response(self):
-        """
-        Create a response dict to be returned (JSON formatted) to the API client.
-
-        :return: Response
-        :rtype: dict
-        """
-        res = {'status': 'ERROR'}
-        if self._status:
-            res['status'] = 'OK'
-            res['aead'] = {'data': self.aead.aead,
-                           'nonce': self.aead.nonce,
-                           'key_handle': self.aead.keyhandle,
-                           }
-            if self._request.plaintext:
-                res['aead']['secret'] = self.aead.secret
-        self._logger.debug("Creating {!r} response for {!r}".format(self._status, self._request))
-        res['nonce'] = self._request.nonce  # Copy nonce (request id) from request to response
-        return res
 
 
 def make_aead(req, logger, config):

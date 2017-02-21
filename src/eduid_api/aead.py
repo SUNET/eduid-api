@@ -90,10 +90,9 @@ class OATHAEAD_YHSM(OATHAEAD):
     Generate an AEAD using a local YubiHSM.
 
     :param logger: logging object
-    :param config: config object
 
     :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
+    :type state: eduid_api.app.MyState
     """
     def __init__(self, logger, state, num_bytes = 20):
         super(OATHAEAD, self).__init__()
@@ -104,7 +103,7 @@ class OATHAEAD_YHSM(OATHAEAD):
 
         self._logger.debug("Generating {!r} bytes AEAD using key_handle 0x{:x}".format(num_bytes, self.keyhandle))
 
-        from_os = os.urandom(num_bytes).encode('hex')
+        from_os = os.urandom(num_bytes)
         from_hsm = state.yhsm.random(num_bytes)
         # XOR together num_bytes from the YubiHSM's RNG with nu_bytes from /dev/urandom.
         xored = ''.join([chr(ord(a) ^ ord(b)) for (a, b) in zip(from_hsm, from_os)])
@@ -116,7 +115,7 @@ class OATHAEAD_YHSM(OATHAEAD):
         self._data = {'data': aead.data.encode('hex'),
                       'nonce': aead.nonce.encode('hex'),
                       'key_handle': self.keyhandle,
-                      'secret': xored,
+                      'secret': xored.encode('hex'),
                       }
 
 
