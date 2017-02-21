@@ -87,6 +87,7 @@ class AppTests(EduidAPITestCase):
     def update_config(self, config):
         config.update({
             'KEYSTORE_FN': os.path.join(self.datadir, 'test_keystore.json'),
+            'VCCS_BASE_URL': 'dummy',
             })
         return config
 
@@ -191,7 +192,6 @@ class AddRequestTests(AppTests):
         """
         self.app.mystate.yhsm = FakeYubiHSM()
         self.app.mystate.oath_aead_keyhandle = 0x1234
-        self.app.mystate.vccs_base_url = 'dummy'
         nonce = os.urandom(10)
         claims = {'version': 1,
                   'token_type': 'OATH',
@@ -300,3 +300,148 @@ class MFATestTests(AppTests):
             self.request('/mfa_test', serialized, remote_addr='127.0.0.2')
             self.assertEqual(cm.exception.msg, ("Method 'mfa_test' not allowed with key ",
                              "<eduID APIKey: 'self_no_commands', type='jose'>"))
+
+
+class AuthRequestTests(AppTests):
+
+    def test_mfa_auth_missing_code(self):
+        """
+        Test basic ability to parse an mfa_auth request.
+        """
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'user_id': 'foo',
+                           }
+                  }
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        with self.assertRaises(EduIDAPIError) as cm:
+            self.request('/mfa_auth', serialized)
+            self.assertEqual(cm.exception.msg, "No 'user_code' in 'OATH' part of request")
+
+    def test_mfa_auth_unknown_user(self):
+        """
+        Test authentication with unknown user.
+        """
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'user_id': 'foo',
+                           'user_code': '123456',
+                           }
+                  }
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        response = self.request('/mfa_auth', serialized)
+
+        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
+
+        response_claims = jwt.claims
+
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+
+        self.assertEqual(response_claims,
+                         {u'nonce': nonce.encode('hex'),
+                          u'reason': u'Unknown user',
+                          u'status': u'FAIL',
+                          u'version': 1,
+                          })
+
+    def test_mfa_auth_unknown_user(self):
+        """
+        Test basic ability to parse an mfa_add request.
+        """
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'user_id': 'foo',
+                           'user_code': '123456',
+                           }
+                  }
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        response = self.request('/mfa_auth', serialized)
+
+        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
+
+        response_claims = jwt.claims
+
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+
+        self.assertEqual(response_claims,
+                         {u'nonce': nonce.encode('hex'),
+                          u'reason': u'Unknown user',
+                          u'status': u'FAIL',
+                          u'version': 1,
+                          })
+
+    def test_mfa_auth(self):
+        """
+        Test basic ability to parse an mfa_add request.
+        """
+
+        # First, add a new credential
+        self.app.mystate.yhsm = FakeYubiHSM()
+        self.app.mystate.oath_aead_keyhandle = 0x1234
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'digits': 6,
+                           'issuer': 'TestIssuer',
+                           'account': 'user@example.org',
+                           }
+                  }
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        response = self.request('/mfa_add', serialized)
+
+        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
+
+        response_claims = jwt.claims
+
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+
+        self.assertIn('OATH', response_claims)
+
+        for this in ['hmac_key', 'key_uri', 'qr_png', 'user_id']:
+            self.assertIn(this, response_claims['OATH'])
+
+        user_id = response_claims['OATH']['user_id']
+
+        #
+        # Now, test authentication with that credential
+        #
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'user_id': user_id,
+                           'user_code': '123456',
+                           }
+                  }
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        response = self.request('/mfa_auth', serialized)
+
+        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
+
+        response_claims = jwt.claims
+
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+
+        self.assertEqual(response_claims,
+                         {u'nonce': nonce.encode('hex'),
+                          u'status': u'OK',
+                          u'OATH': {u'authenticated': True},
+                          })
+

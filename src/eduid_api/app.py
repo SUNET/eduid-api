@@ -59,7 +59,7 @@ class MyState(object):
         self.keys = eduid_api.keystore.KeyStore(app.config['KEYSTORE_FN'])
         app.logger.info("Loaded key(s) from {!r}: {}".format(app.config['KEYSTORE_FN'], self.keys))
 
-        self._parsed_oath_aead_keyhandle = None
+        self.oath_aead_keyhandle = None
         self.yhsm = None
         kh_str = app.config['OATH_AEAD_KEYHANDLE']
         _yhsm_device = app.config.get('OATH_YHSM_DEVICE')
@@ -67,7 +67,7 @@ class MyState(object):
             try:
                 import pyhsm
                 if kh_str:
-                    self._parsed_oath_aead_keyhandle = pyhsm.util.key_handle_to_int(kh_str.strip())
+                    self.oath_aead_keyhandle = pyhsm.util.key_handle_to_int(kh_str.strip())
                 try:
                     self.yhsm = pyhsm.YHSM(device = _yhsm_device)
                     # stir up the pool

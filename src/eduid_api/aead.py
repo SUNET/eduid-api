@@ -125,10 +125,8 @@ class OATHAEAD_Remote(OATHAEAD):
     Generate an AEAD using a remote AEAD generation service.
 
     :param logger: logging object
-    :param config: config object
 
     :type logger: eduid_api.log.EduIDAPILogger
-    :type config: eduid_api.config.EduIDAPIConfig
     """
     def __init__(self, logger, url, keys):
         super(OATHAEAD, self).__init__()

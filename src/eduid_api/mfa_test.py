@@ -59,7 +59,7 @@ class MFATestRequest(BaseRequest):
 
 def test(req, logger):
     """
-    Add a new token to the API auth system.
+    Test API endpoint to verify correct crypto keys etc.
 
     :param req: The parsed test-request
     :param logger: Logger

@@ -39,6 +39,7 @@ import eduid_api.authstore
 import eduid_api.authfactor
 from eduid_api.request import BaseRequest
 from eduid_api.common import EduIDAPIError
+import eduid_common.authn
 
 
 class MFAAuthRequest(BaseRequest):
@@ -63,22 +64,15 @@ class MFAAuthRequest(BaseRequest):
 
     :param request: JSON formatted request
     :param logger: logging object
-    :param config: config object
     :type request: str
     :type logger: logging.logger
-    :type config: eduid_api.config.EduIDAPIConfig
 
     :type token: AuthOATHTokenRequest | U2FTokenRequest
     """
-    def __init__(self, request, remote_ip, logger, config):
-        BaseRequest.__init__(self, request, remote_ip, 'mfa_auth', logger, config)
-
-        for req_field in ['nonce', 'version']:
-            if req_field not in self._parsed_req:
-                raise EduIDAPIError("No {!r} in request".format(req_field))
-
-        if int(self._parsed_req['version']) != 1:
-            raise EduIDAPIError("Unknown version in request".format(req_field))
+    def __init__(self, request, remote_ip, logger):
+        BaseRequest.__init__(self, request, remote_ip, 'mfa_auth',
+                             required = ['token_type'],
+                             )
 
         if self.token_type == 'OATH':
             if 'OATH' not in self._parsed_req:
@@ -175,7 +169,7 @@ class AuthTokenAction(object):
         """
         self._status = False
         self._logger.debug("Authenticating token of type {!r}".format(self._request.token_type))
-        client = vccs_client.VCCSClient(base_url=self._config.vccs_base_url)
+        client = eduid_common.authn.get_vccs_client(self._config['VCCS_BASE_URL'])
         user_code = self._request.token.user_code
         if self._request.token_type == 'OATH':
             assert isinstance(self._user.factors, eduid_api.authfactor.EduIDAuthFactorList)
@@ -186,7 +180,7 @@ class AuthTokenAction(object):
                     this = vccs_client.VCCSOathFactor(factor.type, credential_id=factor.id, user_code=user_code)
                     oath_factors.append(this)
             self._logger.debug("Calling VCCS client at {!r} to authenticate factor(s) {!r}".format(
-                self._config.vccs_base_url, oath_factors))
+                self._config['VCCS_BASE_URL'], oath_factors))
             if client.authenticate(self._user.user_id, oath_factors):
                 self._status = True
                 return True

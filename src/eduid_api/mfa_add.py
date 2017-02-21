@@ -305,7 +305,7 @@ class AddTokenAction(object):
                 )
         else:
             raise NotImplemented()
-        client = eduid_common.authn.get_vccs_client(self._state.vccs_base_url)
+        client = eduid_common.authn.get_vccs_client(self._config['VCCS_BASE_URL'])
         self._logger.debug("Extra debug: Adding credential {!r}".format(self._factor.credential_id))
         client.add_credentials(str(self._user_id), [self._factor])
         self._status = True
