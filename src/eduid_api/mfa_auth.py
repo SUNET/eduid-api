@@ -63,13 +63,11 @@ class MFAAuthRequest(BaseRequest):
     ensure that a response is in fact related to a specific request.
 
     :param request: JSON formatted request
-    :param logger: logging object
     :type request: str
-    :type logger: logging.logger
 
     :type token: AuthOATHTokenRequest | U2FTokenRequest
     """
-    def __init__(self, request, remote_ip, logger):
+    def __init__(self, request, remote_ip):
         BaseRequest.__init__(self, request, remote_ip, 'mfa_auth',
                              required = ['token_type'],
                              )

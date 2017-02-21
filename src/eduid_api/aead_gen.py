@@ -56,11 +56,9 @@ class AEADGenRequest(BaseRequest):
     ensure that a response is in fact related to a specific request.
 
     :param request: JSON formatted request
-    :param logger: logging object
     :type request: str
-    :type logger: eduid_api.log.EduIDAPILogger
     """
-    def __init__(self, request, remote_ip, logger):
+    def __init__(self, request, remote_ip):
         BaseRequest.__init__(self, request, remote_ip, 'aead_gen',
                              required = ['length'])
 

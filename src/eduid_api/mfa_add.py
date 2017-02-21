@@ -71,21 +71,13 @@ class MFAAddRequest(BaseRequest):
     ensure that a response is in fact related to a specific request.
 
     :param request: JSON formatted request
-    :param logger: logging object
     :type request: str
-    :type logger: logging.logger
 
     :type token: AddOATHTokenRequest | AddU2FTokenRequest
     """
-    def __init__(self, request, remote_ip, logger):
-        BaseRequest.__init__(self, request, remote_ip, 'mfa_add')
-
-        for req_field in ['nonce', 'token_type', 'version']:
-            if req_field not in self._parsed_req:
-                raise EduIDAPIError("No {!r} in request".format(req_field))
-
-        if int(self._parsed_req['version']) != 1:
-            raise EduIDAPIError("Unknown version in request".format(self._parsed_req['version']))
+    def __init__(self, request, remote_ip):
+        BaseRequest.__init__(self, request, remote_ip, 'mfa_add',
+                             required = ['nonce', 'token_type'])
 
         if self.token_type == 'OATH':
             if 'OATH' not in self._parsed_req:

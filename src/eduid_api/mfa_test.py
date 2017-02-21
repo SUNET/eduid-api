@@ -48,12 +48,10 @@ class MFATestRequest(BaseRequest):
 
 
     :param request: JSON formatted request
-    :param logger: logging object
 
     :type request: str
-    :type logger: eduid_api.log.EduIDAPILogger
     """
-    def __init__(self, request, remote_ip, logger):
+    def __init__(self, request, remote_ip):
         BaseRequest.__init__(self, request, remote_ip, 'mfa_test')
 
 

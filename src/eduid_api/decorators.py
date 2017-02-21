@@ -77,7 +77,8 @@ class MFAAPIParseAndVerify(object):
             try:
                 data = request.form
                 if 'request' in data:
-                    req = self.req_class(data['request'], _remote_ip, current_app.logger)
+                    # req_class is MFAAddRequest, MFAAuthRequest, ...
+                    req = self.req_class(data['request'], _remote_ip)
                     current_app.logger.debug("Parsed and authenticated {!s} request:\n{!r}".format(self.name, req))
 
                     # Store the request in the request context (flask.g) so that we can use it
