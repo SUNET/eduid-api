@@ -60,7 +60,7 @@ class MFAAddRequest(BaseRequest):
             "token_type": "OATH",
 
             "OATH": {
-                "type":    "oath-totp",
+                "type":    "totp",   (optional, default is 'totp')
                 "account": "user@example.org",
                 "digits":  6,
                 "issuer":  "TestIssuer"
@@ -105,7 +105,7 @@ class AddOATHTokenRequest(object):
     Example parsed_req:
 
         {
-            "type":    "oath-totp",
+            "type":    "totp",     (optional, default is 'totp')
             "account": "user@example.org",
             "digits":  6,
             "issuer":  "TestIssuer"

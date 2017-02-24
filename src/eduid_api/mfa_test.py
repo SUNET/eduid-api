@@ -68,8 +68,6 @@ def test(req, logger):
     :return: Resppnse dict
     :rtype: dict
     """
-    if not isinstance(req, MFATestRequest):
-        logger.error('Wrong type: {!r}'.format(req))
     res = {'mfa_test_status': 'OK',
            'nonce': req.nonce,  # Copy nonce (request id) from request to response
            }

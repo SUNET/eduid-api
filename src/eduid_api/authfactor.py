@@ -37,7 +37,6 @@ import datetime
 
 _VALID_FACTOR_TYPES = ['oath-hotp',
                        'oath-totp',
-                       #'password',
                        #'U2F',
                        ]
 
@@ -170,50 +169,6 @@ class EduIDAuthFactorOATH(EduIDAuthFactor):
             raise ValueError("Unknown elements in 'data: {!r}".format(data.keys()))
 
 
-class EduIDAuthFactorPassword(EduIDAuthFactor):
-    """
-    Password authentication factor.
-
-    :param data: Factor type dependant parameters
-
-    :type data: dict
-    """
-    def __init__(self, data):
-        # Disabled because untested
-        raise NotImplemented('Password factors not implemented')
-
-        EduIDAuthFactor.__init__(self, data)
-
-        if self.type != 'password':
-            raise ValueError("Invalid type in 'data': {!r}".format(self.type))
-
-        self.salt = data.pop('salt')
-
-        if len(data) != 0:
-            raise ValueError("Unknown elements in 'data: {!r}".format(data.keys()))
-
-    @property
-    def salt(self):
-        """
-        :return: Password hashing parameters.
-        :rtype: str | unicode
-        """
-        return self._data.get('salt')
-
-    @salt.setter
-    def salt(self, value):
-        """
-        :param value: Password hashing parameters.
-        :type value: str | unicode
-        """
-        if self._data.get('salt') is not None:
-            # Once salt is set, it should not be modified.
-            raise ValueError("Refusing to modify salt of credential")
-        if not isinstance(value, basestring):
-            raise ValueError("Invalid 'salt' value: {!r}".format(value))
-        self._data['salt'] = str(value)
-
-
 def factor_from_dict(data, factor_type=None):
     """
     :param data: Factor type dependant parameters
@@ -228,8 +183,6 @@ def factor_from_dict(data, factor_type=None):
         data['type'] = str(factor_type)
     if data['type'] in ['oath-totp', 'oath-hotp']:
         return EduIDAuthFactorOATH(data)
-    elif data['type'] == 'password':
-        return EduIDAuthFactorPassword(data)
     else:
         raise ValueError("Invalid 'factor_type' value: {!r}".format(data['type']))
 

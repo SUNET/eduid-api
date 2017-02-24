@@ -42,8 +42,6 @@ from flask import current_app
 
 from eduid_api.common import EduIDAPIError
 
-_TESTING = False
-
 
 class BaseRequest(object):
     """
@@ -65,29 +63,20 @@ class BaseRequest(object):
         self.remote_ip = remote_ip
         self._logger = current_app.logger
         self._signing_key = None
-
-        if isinstance(request_str, dict) and _TESTING:
-            # really only accept a dict when testing, to avoid accidental
-            # acceptance of unsigned requests
-            parsed = request_str
-        else:
-            try:
-                decrypted = self._decrypt(request_str)
-                if not decrypted:
-                    self._logger.warning("Could not decrypt request_str from {!r}".format(remote_ip))
-                    raise EduIDAPIError("Failed decrypting request_str")
-                verified = self._verify(decrypted, remote_ip)
-                if not verified:
-                    self._logger.warning("Could not verify decrypted request_str from {!r}".format(remote_ip))
-                    raise EduIDAPIError("Failed verifying signature")
-                parsed = verified.claims
-            except Exception:
-                self._logger.error("Failed decrypting/verifying request_str:\n{!r}\n-----\n".format(request_str),
-                                   exc_info=True)
-                raise EduIDAPIError("Failed parsing request_str")
-
-        if not isinstance(parsed, dict):
-            raise EduIDAPIError('Parsed request_str is not a dict')
+        try:
+            decrypted = self._decrypt(request_str)
+            if not decrypted:
+                self._logger.warning("Could not decrypt request_str from {!r}".format(remote_ip))
+                raise EduIDAPIError("Failed decrypting request_str")
+            verified = self._verify(decrypted, remote_ip)
+            if not verified:
+                self._logger.warning("Could not verify decrypted request_str from {!r}".format(remote_ip))
+                raise EduIDAPIError("Failed verifying signature")
+            parsed = verified.claims
+        except Exception:
+            self._logger.error("Failed decrypting/verifying request_str:\n{!r}\n-----\n".format(request_str),
+                               exc_info=True)
+            raise EduIDAPIError("Failed parsing request_str")
 
         if parsed.get('version') is not 1:
             raise EduIDAPIError("Unknown or missing version: {!r}".format(parsed.get('version')))
@@ -275,17 +264,10 @@ class MakeRequest(object):
         self._logger.debug("Good signature on response to request using key: {!r}".format(
             self._api_key.jwk
         ))
-        if 'nonce' in self._claims:
-            # there was a nonce in the request, verify it is also present in the response
-            if 'nonce' not in jwt.claims:
-                self._logger.warning("Nonce was present in request, but not in response:\n{!r}".format(
-                    jwt.claims
-                ))
-                raise EduIDAPIError("Request-Response nonce validation error")
-            if jwt.claims['nonce'] != self._claims['nonce']:
-                self._logger.warning("Response nonce {!r} does not match expected {!r}".format(
-                    jwt.claims['nonce'], self._claims['nonce']
-                ))
+        if jwt.claims.get('nonce') != self._claims.get('nonce'):
+            self._logger.warning("Response nonce {!r} does not match expected {!r}".format(
+                jwt.claims['nonce'], self._claims['nonce']
+            ))
         if return_jwt:
             return jwt
         return jwt.claims
