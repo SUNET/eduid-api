@@ -266,7 +266,7 @@ class MakeRequest(object):
         if not priv_key.keytype == 'jose':
             raise EduIDAPIError("Non-jose private key unusuable with decrypt_response")
         decrypted = jose.decrypt(jwe, priv_key.jwk)
-        if not 'v1' in decrypted.claims:
+        if 'v1' not in decrypted.claims:
             self._logger.error("No 'v1' in decrypted claims: {!r}\n\n".format(decrypted))
             raise EduIDAPIError("No 'v1' in decrypted claims")
 

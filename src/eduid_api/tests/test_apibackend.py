@@ -42,11 +42,12 @@ import jose
 import pprint
 import pkg_resources
 
+from mock import patch
+from werkzeug.exceptions import NotFound, Unauthorized
+
 import eduid_common.authn
 from eduid_common.api.testing import EduidAPITestCase
 from eduid_api.app import init_eduid_api_app, EduIDAPIError
-
-from werkzeug.exceptions import NotFound, Unauthorized
 
 eduid_common.authn.TESTING = True
 
@@ -152,6 +153,23 @@ class BaseAppTests(AppTests):
         self.client.get('/ping') == ['pong']
 
 
+def _mocked_requests_post(self, *args, **kwargs):
+    """
+    Mock the call to requests.post.
+    We don't just return a static value, but rather call the real function
+    that would have handled a request.
+    """
+    class MockedResponse(object):
+        def __init__(self, text):
+            self.text = text
+    url = args[0]
+    kwargs['environ_base'] = {'REMOTE_ADDR': '127.0.0.1'}
+    response = self.client.post(url, **kwargs)
+    res = MockedResponse(text = response.data)
+    self.app.logger.debug('Mocked requests.post returning {!r}:\n{!s}'.format(res, res.text))
+    return res
+
+
 class AddRequestTests(AppTests):
 
     def test_mfa_add_request_without_HSM(self):
@@ -184,10 +202,56 @@ class AddRequestTests(AppTests):
 
     def test_mfa_add_request(self):
         """
-        Test basic ability to parse an mfa_add request.
+        Test using mfa_add to add a creedential using a local YubiHSM.
         """
         self.app.mystate.yhsm = FakeYubiHSM()
         self.app.mystate.oath_aead_keyhandle = 0x1234
+        nonce = os.urandom(10)
+        claims = {'version': 1,
+                  'token_type': 'OATH',
+                  'nonce': nonce.encode('hex'),
+                  'OATH': {'digits': 6,
+                           'issuer': 'TestIssuer',
+                           'account': 'user@example.org',
+                           }
+                  }
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+
+        response = self.request('/mfa_add', serialized)
+        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
+        response_claims = jwt.claims
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+
+        self.assertIn('OATH', response_claims)
+
+        for this in ['hmac_key', 'key_uri', 'qr_png', 'user_id']:
+            self.assertIn(this, response_claims['OATH'])
+
+    @patch('requests.post')
+    def test_mfa_add_request_remote(self, mocked_requests_post):
+        """
+        Test using mfa_add to add a creedential using a remote AEAD generating service.
+        """
+        def _call_mock(*x, **y):
+            """
+            Call the _mocked_requests_post function with a reference
+            to 'self', after setting up a fake YubiHSM.
+
+            This means that this test case starts up without an HSM,
+            and fake actually calling another instance of this API
+            that has an HSM connected to it (this is how the app is
+            deployed currently).
+            """
+            _old_yhsm = self.app.mystate.yhsm
+            self.app.mystate.yhsm = FakeYubiHSM()
+            res = _mocked_requests_post(self, *x, **y)
+            self.app.mystate.yhsm = _old_yhsm
+            return res
+
+        mocked_requests_post.side_effect = _call_mock
+        self.app.mystate.oath_aead_keyhandle = 0x1234
+        self.app.config['OATH_AEAD_GEN_URL'] = '/aead_gen'
         nonce = os.urandom(10)
         claims = {'version': 1,
                   'token_type': 'OATH',
