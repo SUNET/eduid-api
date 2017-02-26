@@ -105,13 +105,7 @@ class ErrorResponse(BaseResponse):
     """
 
     def __init__(self, message, request):
-        error = {'version': 1,
-                 'status': 'FAIL',
+        error = {'status': 'FAIL',
                  'reason': message,
                  }
-        #try:
-        #    if 'nonce' in cherrypy.request.eduid_api_parsed_req:
-        #        error['nonce'] = cherrypy.request.eduid_api_parsed_req['nonce']
-        #except AttributeError:
-        #    pass
         BaseResponse.__init__(self, error, request)

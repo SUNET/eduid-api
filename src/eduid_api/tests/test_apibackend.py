@@ -105,6 +105,17 @@ class AppTests(EduidAPITestCase):
                                 )
 
     def jose_request(self, url, claims, remote_addr='127.0.0.1', decode_response=True, add_standard = True):
+        """
+        Make a JOSE request handling the sign/encrypt/decrypt/verify bits.
+
+        Also add and check the nonce+version of the requests, to make test cases more succint.
+        :param url: URL to post to
+        :param claims: The claims to put in the request
+        :param remote_addr: Remote address to pretend is the client
+        :param decode_response: Whether to decode the response or not
+        :param add_standard: Add standard fields (version+nonce) or not
+        :return: (Decrypted) claims from response, minus nonce if automatically set
+        """
         nonce_added = False
         if add_standard:
             if 'nonce' not in claims:
@@ -125,7 +136,12 @@ class AppTests(EduidAPITestCase):
                 response_claims.get('nonce'), claims.get('nonce'))
             )
         if nonce_added:
+            # Checking the result against an expected value is much easier if the nonce is removed
             response_claims.pop('nonce')
+        if 'version' in response_claims:
+            # Don't expect version number in responses. The response ought to be formatted
+            # according to the version of the request.
+            self.fail('There is a version in the response')
         return response_claims
 
     def _sign_and_encrypt(self, claims, priv_jwk, server_jwk, alg = 'RS256'):
@@ -210,7 +226,6 @@ class AddRequestTests(AppTests):
         self.assertEqual(response_claims,
                          {u'reason': u'No local YubiHSM, and no OATH_AEAD_GEN_URL configured',
                           u'status': u'FAIL',
-                          u'version': 1,
                           })
 
     def test_mfa_add_request(self):
@@ -343,7 +358,6 @@ class AuthRequestTests(AppTests):
         self.assertEqual(response_claims,
                          {u'reason': u'Unknown user',
                           u'status': u'FAIL',
-                          u'version': 1,
                           })
 
     def test_mfa_auth(self):
