@@ -104,6 +104,30 @@ class AppTests(EduidAPITestCase):
                                 environ_base = {'REMOTE_ADDR': remote_addr},
                                 )
 
+    def jose_request(self, url, claims, remote_addr='127.0.0.1', decode_response=True, add_standard = True):
+        nonce_added = False
+        if add_standard:
+            if 'nonce' not in claims:
+                claims['nonce'] = os.urandom(10).encode('hex')
+                nonce_added = True
+            if 'version' not in claims:
+                claims['version'] = 1
+        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
+        serialized = jose.serialize_compact(jwe)
+        response = self.request(url, serialized, remote_addr = remote_addr)
+        if not decode_response:
+            return response
+        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
+        response_claims = jwt.claims
+        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        if response_claims.get('nonce') != claims['nonce']:
+            raise AssertionError('Response does not have the expected nonce ({!s} != {!s})'.format(
+                response_claims.get('nonce'), claims.get('nonce'))
+            )
+        if nonce_added:
+            response_claims.pop('nonce')
+        return response_claims
+
     def _sign_and_encrypt(self, claims, priv_jwk, server_jwk, alg = 'RS256'):
         jws = jose.sign(claims, priv_jwk, alg=alg)
         signed_claims = {'v1': jose.serialize_compact(jws)}
@@ -133,11 +157,9 @@ class BaseAppTests(AppTests):
         """
         Test handling of unknown client.
         """
-        claims = {}
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
         with self.assertRaisesRegexp(EduIDAPIError, "Failed parsing request_str"):
-            self.request('/mfa_add', serialized, remote_addr = '192.0.2.101')
+            self.jose_request('/mfa_add', {}, remote_addr = '192.0.2.101',
+                              decode_response = False, add_standard = False)
 
     def test_unknown_client_no_request(self):
         """
@@ -176,26 +198,17 @@ class AddRequestTests(AppTests):
         """
         Test basic ability to parse an mfa_add request.
         """
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce.encode('hex'),
+        claims = {'token_type': 'OATH',
                   'OATH': {'digits': 6,
                            'issuer': 'TestIssuer',
                            'account': 'user@example.org',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
 
-        response = self.request('/mfa_add', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_add', claims)
 
         self.assertEqual(response_claims,
-                         {u'nonce': nonce.encode('hex'),
-                          u'reason': u'No local YubiHSM, and no OATH_AEAD_GEN_URL configured',
+                         {u'reason': u'No local YubiHSM, and no OATH_AEAD_GEN_URL configured',
                           u'status': u'FAIL',
                           u'version': 1,
                           })
@@ -206,22 +219,13 @@ class AddRequestTests(AppTests):
         """
         self.app.mystate.yhsm = FakeYubiHSM()
         self.app.mystate.oath_aead_keyhandle = 0x1234
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce.encode('hex'),
+        claims = {'token_type': 'OATH',
                   'OATH': {'digits': 6,
                            'issuer': 'TestIssuer',
                            'account': 'user@example.org',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_add', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_add', claims)
 
         self.assertIn('OATH', response_claims)
 
@@ -252,22 +256,13 @@ class AddRequestTests(AppTests):
         mocked_requests_post.side_effect = _call_mock
         self.app.mystate.oath_aead_keyhandle = 0x1234
         self.app.config['OATH_AEAD_GEN_URL'] = '/aead_gen'
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce.encode('hex'),
+        claims = {'token_type': 'OATH',
                   'OATH': {'digits': 6,
                            'issuer': 'TestIssuer',
                            'account': 'user@example.org',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_add', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_add', claims)
 
         self.assertIn('OATH', response_claims)
 
@@ -278,36 +273,21 @@ class AddRequestTests(AppTests):
         """
         Test add_request with missing mandatory parameters.
         """
-        claims = {'version': 1,
-                  'token_type': 'OATH',
+        claims = {'token_type': 'OATH',
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
         with self.assertRaises(EduIDAPIError) as cm:
-            self.request('/mfa_add', serialized)
+            self.jose_request('/mfa_add', claims, decode_response = False)
             self.assertEqual(cm.exception.msg, "No 'nonce' in request_str")
 
-        nonce = os.urandom(10)
-        claims['nonce'] = nonce.encode('hex'),
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
         with self.assertRaises(EduIDAPIError) as cm:
-            self.request('/mfa_add', serialized)
+            self.jose_request('/mfa_add', claims, decode_response = False)
             self.assertEqual(cm.exception.msg, "No 'OATH' in request_str")
 
         claims['OATH'] = {'digits': 6,
                           'issuer': 'TestIssuer',
                           'account': 'user@example.org',
                           }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_add', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_add', claims)
 
         self.assertEqual(response_claims['status'], 'FAIL')
         self.assertEqual(response_claims['reason'], 'No local YubiHSM, and no OATH_AEAD_GEN_URL configured')
@@ -319,36 +299,20 @@ class MFATestTests(AppTests):
         """
         Test basic ability to parse an mfa_test request.
         """
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'nonce': nonce.encode('hex'),
-                  }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_test', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        claims = {}
+        response_claims = self.jose_request('/mfa_test', claims)
 
         self.assertEqual(response_claims,
-                         {u'nonce': nonce.encode('hex'),
-                          u'mfa_test_status': u'OK',
+                         {u'mfa_test_status': u'OK',
                           })
 
     def test_mfa_test_not_an_allowed_command(self):
         """
         Test that a key without the mfa_test command can't invoke it.
         """
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'nonce': nonce.encode('hex'),
-                  }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
+        claims = {}
         with self.assertRaisesRegexp(EduIDAPIError, "Method 'mfa_test' not allowed with key"):
-            self.request('/mfa_test', serialized, remote_addr='127.0.0.2')
+            self.jose_request('/mfa_test', claims, remote_addr='127.0.0.2', decode_response = False)
 
 
 class AuthRequestTests(AppTests):
@@ -357,43 +321,27 @@ class AuthRequestTests(AppTests):
         """
         Test basic ability to parse an mfa_auth request.
         """
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce.encode('hex'),
+        claims = {'token_type': 'OATH',
                   'OATH': {'user_id': 'foo',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
         with self.assertRaises(EduIDAPIError) as cm:
-            self.request('/mfa_auth', serialized)
+            self.jose_request('/mfa_auth', claims, decode_response = False)
             self.assertEqual(cm.exception.msg, "No 'user_code' in 'OATH' part of request")
 
     def test_mfa_auth_unknown_user(self):
         """
         Test authentication with unknown user.
         """
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce.encode('hex'),
+        claims = {'token_type': 'OATH',
                   'OATH': {'user_id': 'foo',
                            'user_code': '123456',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_auth', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_auth', claims)
 
         self.assertEqual(response_claims,
-                         {u'nonce': nonce.encode('hex'),
-                          u'reason': u'Unknown user',
+                         {u'reason': u'Unknown user',
                           u'status': u'FAIL',
                           u'version': 1,
                           })
@@ -406,25 +354,13 @@ class AuthRequestTests(AppTests):
         # First, add a new credential
         self.app.mystate.yhsm = FakeYubiHSM()
         self.app.mystate.oath_aead_keyhandle = 0x1234
-        nonce = os.urandom(10)
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce.encode('hex'),
+        claims = {'token_type': 'OATH',
                   'OATH': {'digits': 6,
                            'issuer': 'TestIssuer',
                            'account': 'user@example.org',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_add', serialized)
-
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-
-        response_claims = jwt.claims
-
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_add', claims)
 
         self.assertIn('OATH', response_claims)
 
@@ -436,25 +372,15 @@ class AuthRequestTests(AppTests):
         #
         # Now, test authentication with that credential
         #
-        nonce = os.urandom(10).encode('hex')
-        claims = {'version': 1,
-                  'token_type': 'OATH',
-                  'nonce': nonce,
+        claims = {'token_type': 'OATH',
                   'OATH': {'user_id': user_id,
                            'user_code': '123456',
                            }
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/mfa_auth', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/mfa_auth', claims)
 
         self.assertEqual(response_claims,
-                         {u'nonce': nonce,
-                          u'status': u'OK',
+                         {u'status': u'OK',
                           u'OATH': {u'authenticated': True},
                           })
 
@@ -465,14 +391,9 @@ class AeadGenRequestTests(AppTests):
         """
         Test basic ability to parse an aead_gen request.
         """
-        claims = {'version': 1,
-                  'nonce': os.urandom(10).encode('hex'),
-                  }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
+        claims = {}
         with self.assertRaisesRegexp(EduIDAPIError, "No 'length' in request_str"):
-            self.request('/aead_gen', serialized)
+            self.jose_request('/aead_gen', claims, decode_response = False)
 
     def test_aead_gen(self):
         """
@@ -480,22 +401,12 @@ class AeadGenRequestTests(AppTests):
         """
         self.app.mystate.yhsm = FakeYubiHSM()
         self.app.mystate.oath_aead_keyhandle = 0x1234
-        nonce = os.urandom(10).encode('hex')
-        claims = {'version': 1,
-                  'nonce': nonce,
-                  'length': 10,
+        claims = {'length': 10,
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/aead_gen', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/aead_gen', claims)
 
         self.assertEqual(response_claims,
-                         {u'nonce': nonce,
-                          u'status': u'OK',
+                         {u'status': u'OK',
                           u'aead': {u'data': u'4141414141414141414141414141',
                                     u'key_handle': self.app.mystate.oath_aead_keyhandle,
                                     u'nonce': u'00'},
@@ -507,25 +418,15 @@ class AeadGenRequestTests(AppTests):
         """
         self.app.mystate.yhsm = FakeYubiHSM()
         self.app.mystate.oath_aead_keyhandle = 0x1234
-        nonce = os.urandom(10).encode('hex')
-        claims = {'version': 1,
-                  'nonce': nonce,
-                  'length': 10,
+        claims = {'length': 10,
                   'plaintext': True,
                   }
-        jwe = self._sign_and_encrypt(claims, self.priv_jwk, self.server_jwk)
-        serialized = jose.serialize_compact(jwe)
-
-        response = self.request('/aead_gen', serialized)
-        jwt = self._decrypt_and_verify(response.data, self.priv_jwk, self.server_jwk)
-        response_claims = jwt.claims
-        self.app.logger.debug("Response claims:\n{!s}".format(pprint.pformat(response_claims)))
+        response_claims = self.jose_request('/aead_gen', claims)
 
         decoded_secret = response_claims['aead'].pop('secret').decode('hex')
         self.assertEqual(len(decoded_secret), claims['length'])
         self.assertEqual(response_claims,
-                         {u'nonce': nonce,
-                          u'status': u'OK',
+                         {u'status': u'OK',
                           u'aead': {u'data': u'4141414141414141414141414141',
                                     u'key_handle': self.app.mystate.oath_aead_keyhandle,
                                     u'nonce': u'00'},
