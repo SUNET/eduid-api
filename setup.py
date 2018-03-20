@@ -14,11 +14,11 @@ try:
 except IOError:
     pass
 
-version = '0.2.4'
+version = '0.2.5'
 
 requires = [
     'eduid_am >= 0.4.9',
-    'pymongo >= 2.8,<3.0',
+    'pymongo >= 3.6',
     'cherrypy >= 3.6.0',
     'simplejson >= 3.6.5',
     'jose >= 0.3.0',
@@ -35,6 +35,7 @@ test_requires = [
 testing_extras = test_requires + [
     'nose==1.2.1',
     'coverage==3.6',
+    'nosexcover>=1.0.8',
 ]
 
 
