@@ -1,3 +1,6 @@
----
-builders:
-  - sunet-python
+python_module: eduid_api
+publish_over_ssh:
+  - pypi.sunet.se
+slack:
+  room: eduid-builds
+clean_workspace: true
